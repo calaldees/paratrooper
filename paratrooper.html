@@ -5,11 +5,72 @@
 <script type="module">
     const canvas = document.getElementById('canvas');
     const c = canvas.getContext('2d');
-    c.fillStyle = 'black';
-    c.fillRect(0, 0, canvas.width, canvas.height);
     const w = canvas.width;
     const h = canvas.height;
-    const _w = w/2;
-    const _h = h/2;
+
+
+
+    function clearScreen(c) {
+        c.fillStyle = 'black';
+        c.fillRect(0, 0, w, h);
+    }
+
+    const state = {
+        input: {
+            angle: 0.0,
+        },
+        xx: 50,
+    };
+
+
+    document.addEventListener("pointermove", (e) => {
+        //console.log(-e.movementX, e.movementY);
+        state.input.angle += e.movementX/360;
+    }, false);
+
+
+    let running = true;
+
+    function setRunning(_running) {running = _running; console.log("running", running); requestAnimationFrame(main);}
+    window.addEventListener("focus", () => {setRunning(true)}, false);
+    window.addEventListener("blur", () => {setRunning(false)}, false);
+
+
+
+    function incrementModel(state) {
+
+    }
+    function render(c, state) {
+        clearScreen(c);
+
+        c.fillStyle = 'yellow';
+        c.fillRect(state.xx, 50, 10, 10);
+        state.xx++;
+
+        const angle = state.input.angle;
+        const [x, y, s] = [100, 100, 20];
+        c.beginPath();
+        c.strokeStyle = 'red';
+        c.moveTo(x, y);
+        c.lineTo(
+            x + Math.sin(angle) * s,
+            y + Math.cos(angle) * s,
+        );
+        c.stroke();
+    }
+
+
+
+    function main(time) {
+        if (c) {
+            incrementModel(state);
+            render(c, state);
+        }
+        if (running) {
+            requestAnimationFrame(main);
+        }
+    }
+    main();
+
 </script>
 </body>
