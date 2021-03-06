@@ -16,36 +16,68 @@
     }
 
     const state = {
+        running: true,
+        frame: 0,
         input: {
             angle: 0.0,
+            fire: false,
         },
+        bullets: [
+        ],
         xx: 50,
     };
 
 
+    class Bullet {
+        constructor(point, velocity) {
+            this.point_current = [...point];
+            this.point_previous = [...point];
+            this.velocity = [...velocity];
+        }
+        get point() {
+            return this.point_current;
+        }
+        set point(point) {
+            //this.point_previous.splice(0,2, ...this.point_current);
+            //this.point_current.splice(0,2, ...this.point);
+            this.point_current = point;
+        }
+        move() {
+            this.point = [
+                this.point_current[0] + this.velocity[0],
+                this.point_current[1] + this.velocity[1],
+            ];
+        }
+    }
+
+
+    document.addEventListener('mouseup', () => state.input.fire = false, false);
+    document.addEventListener('mousedown', () => state.input.fire = true, false);
     document.addEventListener("pointermove", (e) => {
         //console.log(-e.movementX, e.movementY);
-        state.input.angle += e.movementX/360;
+        state.input.angle += e.movementX/180;
     }, false);
 
 
-    let running = true;
-
-    function setRunning(_running) {running = _running; console.log("running", running); requestAnimationFrame(main);}
+    function setRunning(running) {state.running = running; console.log("running", running); requestAnimationFrame(main);}
     window.addEventListener("focus", () => {setRunning(true)}, false);
     window.addEventListener("blur", () => {setRunning(false)}, false);
 
 
 
     function incrementModel(state) {
-
+        if (state.input.fire && state.frame % 8 == 0) {
+            state.bullets.push(
+                new Bullet([100,100], [1,1])
+            );
+        }
     }
     function render(c, state) {
         clearScreen(c);
 
         c.fillStyle = 'yellow';
         c.fillRect(state.xx, 50, 10, 10);
-        state.xx++;
+        if (state.input.fire) {state.xx++;}
 
         const angle = state.input.angle;
         const [x, y, s] = [100, 100, 20];
@@ -57,6 +89,14 @@
             y + Math.cos(angle) * s,
         );
         c.stroke();
+
+        for (let bullet of state.bullets) {
+            c.fillStyle = 'white';
+            c.fillRect(...bullet.point, 2, 2);
+            bullet.move();
+        }
+
+        state.frame++;
     }
 
 
@@ -66,7 +106,7 @@
             incrementModel(state);
             render(c, state);
         }
-        if (running) {
+        if (state.running) {
             requestAnimationFrame(main);
         }
     }
