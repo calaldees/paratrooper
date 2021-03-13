@@ -15,18 +15,62 @@
         c.fillRect(0, 0, w, h);
     }
 
-    const state = {
-        running: true,
-        frame: 0,
-        input: {
-            angle: 0.0,
-            fire: false,
-        },
-        bullets: [
-        ],
-        xx: 50,
-    };
+    // https://stackoverflow.com/a/28866825
+    // doctest?! Explain
+    function isIntersecting(p1, p2, p3, p4) {
+        function CCW(p1, p2, p3) {
+            //return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x);
+            return (p3[1] - p1[1]) * (p2[0] - p1[0]) > (p2[1] - p1[1]) * (p3[0] - p1[0]);
+        }
+        return (CCW(p1, p3, p4) != CCW(p2, p3, p4)) && (CCW(p1, p2, p3) != CCW(p1, p2, p4));
+    }
 
+
+
+
+    class Polygon {
+        constructor() {
+            this.points = [];
+        }
+        addPoint(point) {
+            this.points.push([...point]);
+        }
+        * lines() {
+            if (!this.points.length) {return;}
+            let b = undefined;
+            for (let a of this.points) {
+                if (a && b) {
+                    yield [a, b];
+                }
+                b = a;
+            }
+            yield [...b, ...this.points[0]];
+        }
+        isInside(point) {
+            let intersections = 0;
+            for (let line of this.lines()) {
+                if (isIntersecting(...line, point, [-100, -100])) {  // kind of rubbish hard coding ... maybe use int.min?
+                    intersections++;
+                    //console.log("oow"); // something up here
+                }
+            }
+            return intersections % 2;  // return 0 for no collision and 1 for collision
+        }
+        get Path2D() {
+            //debugger;
+            const p = new Path2D();
+            if (!this.points.length) {return p;}
+            // duplicated from lines? optimise
+            let b = undefined;
+            for (let a of this.points) {
+                if (!b) {p.moveTo(...a)}
+                else {p.lineTo(...a);}
+                b = a ;
+            }
+            p.lineTo(...this.points[0]);
+            return p;
+        }
+    }
 
     class Bullet {
         constructor(point, velocity) {
@@ -34,13 +78,15 @@
             this.point_previous = [...point];
             this.velocity = [...velocity];
         }
+        get points() {
+            return [this.point_current, this.point_previous];
+        }
         get point() {
             return this.point_current;
         }
         set point(point) {
-            //this.point_previous.splice(0,2, ...this.point_current);
-            //this.point_current.splice(0,2, ...this.point);
-            this.point_current = point;
+            this.point_previous.splice(0,2, ...this.point_current);
+            this.point_current.splice(0,2, ...point);
         }
         move() {
             this.point = [
@@ -51,11 +97,43 @@
     }
 
 
-    document.addEventListener('mouseup', () => state.input.fire = false, false);
-    document.addEventListener('mousedown', () => state.input.fire = true, false);
+    const screenPoly = new Polygon();
+    for (let p of [
+        [0,0],
+        [50,0],
+        [50,50],
+        [0,50],
+    ]) {
+        screenPoly.addPoint(p);
+    }
+    
+
+
+    const state = {
+        running: true,
+        frame: 0,
+        input: {
+        },
+        gun: {
+            pos: [100, 100],
+            length: 20,
+            angle: Math.PI,
+            angle_min: Math.PI - (Math.PI/2),
+            angle_max: Math.PI + (Math.PI/2),
+            fire: false,
+        },
+        bullets: [],
+        screen: screenPoly,
+        xx: 50,
+    };
+
+
+    document.addEventListener('mouseup', () => state.gun.fire = false, false);
+    document.addEventListener('mousedown', () => state.gun.fire = true, false);
     document.addEventListener("pointermove", (e) => {
         //console.log(-e.movementX, e.movementY);
-        state.input.angle += e.movementX/180;
+        state.gun.angle += e.movementX/180;
+        state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
     }, false);
 
 
@@ -64,45 +142,76 @@
     window.addEventListener("blur", () => {setRunning(false)}, false);
 
 
+    //-----------
+
+    function gun_tip_pos(gun) {
+        const [x, y, length, angle] = [...gun.pos, gun.length, gun.angle];
+        return [
+            x + (Math.sin(angle) * length),
+            y + (Math.cos(angle) * length),
+        ];
+    }
+
+    //------------
+
 
     function incrementModel(state) {
-        if (state.input.fire && state.frame % 8 == 0) {
+        if (state.gun.fire && state.frame % 8 == 0) {
+            const v = 1;
+            const angle = state.gun.angle;
             state.bullets.push(
-                new Bullet([100,100], [1,1])
+                new Bullet(
+                    gun_tip_pos(state.gun), // used named params here?
+                    [Math.sin(angle) * v, Math.cos(angle) * v],
+                )
             );
         }
-    }
-    function render(c, state) {
-        clearScreen(c);
-
-        c.fillStyle = 'yellow';
-        c.fillRect(state.xx, 50, 10, 10);
-        if (state.input.fire) {state.xx++;}
-
-        const angle = state.input.angle;
-        const [x, y, s] = [100, 100, 20];
-        c.beginPath();
-        c.strokeStyle = 'red';
-        c.moveTo(x, y);
-        c.lineTo(
-            x + Math.sin(angle) * s,
-            y + Math.cos(angle) * s,
-        );
-        c.stroke();
 
         for (let bullet of state.bullets) {
-            c.fillStyle = 'white';
-            c.fillRect(...bullet.point, 2, 2);
             bullet.move();
         }
 
         state.frame++;
     }
+    function render(c, state) {
+        clearScreen(c);
+
+        // Test
+        c.fillStyle = 'yellow';
+        c.fillRect(state.xx, 50, 10, 10);
+        if (state.gun.fire) {state.xx++;}
+
+        c.strokeStyle = 'green';
+        c.lineWidth = 2;
+        c.stroke(state.screen.Path2D);
+
+        // Gun
+        const [x, y, length, angle] = [...state.gun.pos, state.gun.length, state.gun.angle];
+        c.beginPath();
+        c.strokeStyle = 'red';
+        c.lineWidth = 5;
+        c.moveTo(x, y);
+        c.lineTo(
+            x + Math.sin(angle) * length,
+            y + Math.cos(angle) * length,
+        );
+        c.stroke();
+
+        // Bullets
+        for (let bullet of state.bullets) {
+            c.fillStyle = 'white';
+            if (state.screen.isInside(bullet.point)) {
+                c.fillStyle = 'green';
+            }
+            c.fillRect(...bullet.point, 2, 2);
+        }
+
+    }
 
 
 
     function main(time) {
-        if (c) {
+        if (c) {  /// is this needed?
             incrementModel(state);
             render(c, state);
         }
