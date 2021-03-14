@@ -42,13 +42,41 @@
     const h = canvas.height;
 
 
-
-
-
     function clearScreen(c) {
         c.fillStyle = 'black';
         c.fillRect(0, 0, w, h);
     }
+
+
+    function loadBase64Images(base64, sprite_location_data, sprite_output) {
+        const image = new Image();
+        image.onload = function() {
+            c.fillStyle = 'black';  // TODO transparent
+            c.fillRect(0, 0, w, h);
+            c.drawImage(image, 0, 0);
+            for (let [name, location] of Object.entries(sprite_location_data)) {
+                sprite_output[name] = c.getImageData(...location);
+            }
+        };
+        image.src = "data:image/png;base64,"+base64;
+    }
+
+    const sprites = {};
+    loadBase64Images(
+        "iVBORw0KGgoAAAANSUhEUgAAAEoAAAAwCAYAAAC2aezWAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSkWqDnYQcchQBcGCqIhjqWIRLJS2QqsOJpf+QZOGJMXFUXAtOPizWHVwcdbVwVUQBH9A3NycFF2kxO+SQosY7zju4b3vfbn7DhAaFaaaXZOAqllGKh4Ts7lVMfAKP/ppAuMSM/VEejEDz/F1Dx/f7yI8y7vuz9Gn5E0G+ETiKNMNi3iDeHbT0jnvE4dYSVKIz4knDLog8SPXZZffOBcdFnhmyMik5olDxGKxg+UOZiVDJZ4hDiuqRvlC1mWF8xZntVJjrXvyFwbz2kqa67RGEMcSEkhChIwayqjAQoR2jRQTKTqPefiHHX+SXDK5ymDkWEAVKiTHD/4Hv3trFqan3KRgDOh+se2PUSCwCzTrtv19bNvNE8D/DFxpbX+1Acx9kl5va+EjYGAbuLhua/IecLkDDD3pkiE5kp+WUCgA72f0TTlg8BboXXP71jrH6QOQoV4t3wAHh8BYkbLXPd7d09m3f2ta/fsBQINyk4GMT3IAAAAGYktHRAD/AP8A/6C9p5MAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQflAw4OHwGd4T5wAAABiElEQVRo3u1ay5LDMAgzmf1F9yPrj6SHJjPZ1EkMBrZeSzM9JAdhhPCroczMaUUhomQMb/4wrIlwSon3SY3CH4Vl/1CIkmcy3vyhrvKovDd/BH4sKv88PNPNXOTNH+oqyS/zJ6L5Q+eonrnncXhnmYw3fwuIMzMVIs7Mj+d7UL8GlK/HQ4X2rqklSSuPK/8w7Vdrl00gT/4wR23J0FpqqwEcK73F8OIPEUqLzS1U9IPm3CecJLY0Vk9eHxOq56QascK1xlikateW6KtlW1pFKb8mjjZGfaNyguOkyg17HG/+kBi1SrSQa8SK4veIQRK7ti40zCw+Znjz98YwT0abRAR/TwxVVS6X1M79jTd/VIx0tiltffcN/JoYpCG03D1781vFoDvSoe+5PY4wd6rPLpjoIDyzWOLT/KxiLQmAULbXDJJTdx74P7kosWYXCa1n6arpWw6OMnQV3ARH2bkKbroT648+hEDr/Zfbgz1wHyVAZh76e0u03re56awN4SgAQgEAAAAAIMUL9udvQPJcSDgAAAAASUVORK5CYII=",
+        {
+            jet1: [0,0,24,10],
+            jet2: [24,0,24,10],
+            heli1: [0,10,24,10],
+            heli2: [24,10,24,10],
+            heli3: [48,10,24,10],
+            parachute: [0,20,12,14],
+            trooper: [4,34, 4, 8],
+        },
+        sprites,
+    );
+
+
 
     /*
     Design doc stuff
@@ -222,7 +250,7 @@
         // Gun
         const [x, y, length, angle] = [...state.gun.pos, state.gun.length, state.gun.angle];
         c.beginPath();
-        c.strokeStyle = 'red';
+        c.strokeStyle = 'cyan';
         c.lineWidth = 5;
         c.moveTo(x, y);
         c.lineTo(
@@ -241,6 +269,10 @@
         }
         
         c.fillText(state.bullets.length, 200, 200);
+
+        if (sprites.jet1) {
+            c.putImageData(sprites['jet1'], state.frame, 50);
+        }
 
     }
 
