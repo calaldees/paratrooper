@@ -3,16 +3,22 @@
 <canvas id="canvas" width="480" height="270" style="image-rendering: pixelated; object-fit: contain; width:100%; max-width: 100%; height: 100%; max-height: 100%;">
 </canvas>
 <script type="module">
-    const canvas = document.getElementById('canvas');
-    const c = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
 
 
 
-    function clearScreen(c) {
-        c.fillStyle = 'black';
-        c.fillRect(0, 0, w, h);
+    // External functions copy&paste -------------------------------------------
+
+    // https://stackoverflow.com/a/37319954/3356840
+    function filterInPlace(a, condition, thisArg) {
+        let j = 0;
+        a.forEach((e, i) => {
+            if (condition.call(thisArg, e, i, a)) {
+                if (i!==j) a[j] = e;
+                j++;
+            }
+        });
+        a.length = j;
+        return a;
     }
 
     // https://stackoverflow.com/a/28866825
@@ -24,6 +30,36 @@
         }
         return (CCW(p1, p3, p4) != CCW(p2, p3, p4)) && (CCW(p1, p2, p3) != CCW(p1, p2, p4));
     }
+
+
+
+    // Setup? ------------------------------------------------------------------
+
+
+    const canvas = document.getElementById('canvas');
+    const c = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+
+
+
+
+    function clearScreen(c) {
+        c.fillStyle = 'black';
+        c.fillRect(0, 0, w, h);
+    }
+
+    /*
+    Design doc stuff
+    Points are arrays of two elements e.g [x, y] -> [10, 87]
+    */
+
+    function isPointOutOfScreenBounds(point) {
+        const [x, y] = point;
+        return (x < 0 || x > w || y < 0 || y > w);
+    }
+
 
 
 
@@ -49,7 +85,7 @@
         isInside(point) {
             let intersections = 0;
             for (let line of this.lines()) {
-                if (isIntersecting(...line, point, [-100, -100])) {  // kind of rubbish hard coding ... maybe use int.min?
+                if (isIntersecting(...line, point, [-1, -2])) {  // kind of rubbish hard coding ... maybe use int.min?
                     intersections++;
                     //console.log("oow"); // something up here
                 }
@@ -84,6 +120,9 @@
         get point() {
             return this.point_current;
         }
+        get pointInt() {
+            return this.point_current.map(Math.floor);
+        }
         set point(point) {
             this.point_previous.splice(0,2, ...this.point_current);
             this.point_current.splice(0,2, ...point);
@@ -115,12 +154,12 @@
         input: {
         },
         gun: {
-            pos: [100, 100],
+            pos: [w/2, h*0.80],
             length: 20,
             angle: Math.PI,
             angle_min: Math.PI - (Math.PI/2),
             angle_max: Math.PI + (Math.PI/2),
-            fire: false,
+            fire: 0,
         },
         bullets: [],
         screen: screenPoly,
@@ -128,11 +167,11 @@
     };
 
 
-    document.addEventListener('mouseup', () => state.gun.fire = false, false);
-    document.addEventListener('mousedown', () => state.gun.fire = true, false);
+    document.addEventListener('mouseup', () => state.gun.fire = 0, false);
+    document.addEventListener('mousedown', () => state.gun.fire = state.frame, false);
     document.addEventListener("pointermove", (e) => {
         //console.log(-e.movementX, e.movementY);
-        state.gun.angle += e.movementX/180;
+        state.gun.angle -= e.movementX/180;
         state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
     }, false);
 
@@ -156,7 +195,7 @@
 
 
     function incrementModel(state) {
-        if (state.gun.fire && state.frame % 8 == 0) {
+        if (state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
             const v = 1;
             const angle = state.gun.angle;
             state.bullets.push(
@@ -167,19 +206,14 @@
             );
         }
 
-        for (let bullet of state.bullets) {
-            bullet.move();
-        }
+        for (let bullet of state.bullets) {bullet.move();}
+        filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
 
         state.frame++;
     }
     function render(c, state) {
         clearScreen(c);
 
-        // Test
-        c.fillStyle = 'yellow';
-        c.fillRect(state.xx, 50, 10, 10);
-        if (state.gun.fire) {state.xx++;}
 
         c.strokeStyle = 'green';
         c.lineWidth = 2;
@@ -203,8 +237,10 @@
             if (state.screen.isInside(bullet.point)) {
                 c.fillStyle = 'green';
             }
-            c.fillRect(...bullet.point, 2, 2);
+            c.fillRect(...bullet.pointInt, 2, 2);
         }
+        
+        c.fillText(state.bullets.length, 200, 200);
 
     }
 
