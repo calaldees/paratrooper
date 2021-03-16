@@ -21,17 +21,6 @@
         return a;
     }
 
-    // https://stackoverflow.com/a/28866825
-    // doctest?! Explain
-    function isIntersecting(p1, p2, p3, p4) {
-        function CCW(p1, p2, p3) {
-            //return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x);
-            return (p3[1] - p1[1]) * (p2[0] - p1[0]) > (p2[1] - p1[1]) * (p3[0] - p1[0]);
-        }
-        return (CCW(p1, p3, p4) != CCW(p2, p3, p4)) && (CCW(p1, p2, p3) != CCW(p1, p2, p4));
-    }
-
-
 
     // Setup? ------------------------------------------------------------------
 
@@ -85,65 +74,15 @@
 
     function isPointOutOfScreenBounds(point) {
         const [x, y] = point;
-        return (x < 0 || x > w || y < 0 || y > w);
+        return (x < 0 || x > w || y < -20 || y > w);
     }
 
 
 
-
-
-    class Polygon {
-        constructor() {
-            this.points = [];
-        }
-        addPoint(point) {
-            this.points.push([...point]);
-        }
-        * lines() {
-            if (!this.points.length) {return;}
-            let b = undefined;
-            for (let a of this.points) {
-                if (a && b) {
-                    yield [a, b];
-                }
-                b = a;
-            }
-            yield [...b, ...this.points[0]];
-        }
-        isInside(point) {
-            let intersections = 0;
-            for (let line of this.lines()) {
-                if (isIntersecting(...line, point, [-1, -2])) {  // kind of rubbish hard coding ... maybe use int.min?
-                    intersections++;
-                    //console.log("oow"); // something up here
-                }
-            }
-            return intersections % 2;  // return 0 for no collision and 1 for collision
-        }
-        get Path2D() {
-            //debugger;
-            const p = new Path2D();
-            if (!this.points.length) {return p;}
-            // duplicated from lines? optimise
-            let b = undefined;
-            for (let a of this.points) {
-                if (!b) {p.moveTo(...a)}
-                else {p.lineTo(...a);}
-                b = a ;
-            }
-            p.lineTo(...this.points[0]);
-            return p;
-        }
-    }
-
-    class Bullet {
+    class AbstractGameObject {
         constructor(point, velocity) {
             this.point_current = [...point];
-            this.point_previous = [...point];
             this.velocity = [...velocity];
-        }
-        get points() {
-            return [this.point_current, this.point_previous];
         }
         get point() {
             return this.point_current;
@@ -152,7 +91,6 @@
             return this.point_current.map(Math.floor);
         }
         set point(point) {
-            this.point_previous.splice(0,2, ...this.point_current);
             this.point_current.splice(0,2, ...point);
         }
         move() {
@@ -164,16 +102,41 @@
     }
 
 
-    const screenPoly = new Polygon();
-    for (let p of [
-        [0,0],
-        [50,0],
-        [50,50],
-        [0,50],
-    ]) {
-        screenPoly.addPoint(p);
+    class Bullet extends AbstractGameObject {
+        constructor(point, velocity) {
+            super(point, velocity);
+            this.point_previous = [...point];
+        }
+        get points() {
+            return [this.point_current, this.point_previous];
+        }
+        get point() {
+            return this.point_current;
+        }
+        set point(point) {
+            this.point_previous.splice(0,2, ...this.point_current);
+            this.point_current.splice(0,2, ...point);  // duplicated in super? how call super? how?
+        }
     }
-    
+
+    class Particle extends AbstractGameObject {
+        constructor(point, velocity) {
+            super(point, velocity);
+        }
+    }
+
+    class AbstractEnemy extends AbstractGameObject {
+        constructor(point, velocity) {
+            super(point, velocity);
+            this.bounds = [24, 10];
+        }
+        isPointInBounds(point) {
+            const [px, py] = point;
+            const [ix, iy] = this.point;
+            const [iw, ih] = this.bounds;
+            return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+        }
+    }
 
 
     const state = {
@@ -189,10 +152,27 @@
             angle_max: Math.PI + (Math.PI/2),
             fire: 0,
         },
+        enemies: {
+            jets: [],
+            heli: [],
+            paratrooper: [],
+            paratrooper_ground: [],
+            bombs: [],
+        },
+        particles: [],
         bullets: [],
-        screen: screenPoly,
-        xx: 50,
+        level: 1,
     };
+
+
+    function setupLevelEnemies(state) {
+        const level = state.level;
+        const num_heli = Math.floor(Math.max(level * 0.5, 50));
+        const num_jets = Math.floor(Math.max(level * 0.5, 20));
+        for (let i=0 ; i<num_heli ; i++) {
+
+        }
+    }
 
 
     document.addEventListener('mouseup', () => state.gun.fire = 0, false);
@@ -243,15 +223,11 @@
         clearScreen(c);
 
 
-        c.strokeStyle = 'green';
-        c.lineWidth = 2;
-        c.stroke(state.screen.Path2D);
-
         // Gun
         const [x, y, length, angle] = [...state.gun.pos, state.gun.length, state.gun.angle];
         c.beginPath();
         c.strokeStyle = 'cyan';
-        c.lineWidth = 5;
+        c.lineWidth = 4;
         c.moveTo(x, y);
         c.lineTo(
             x + Math.sin(angle) * length,
@@ -262,9 +238,6 @@
         // Bullets
         for (let bullet of state.bullets) {
             c.fillStyle = 'white';
-            if (state.screen.isInside(bullet.point)) {
-                c.fillStyle = 'green';
-            }
             c.fillRect(...bullet.pointInt, 2, 2);
         }
         
