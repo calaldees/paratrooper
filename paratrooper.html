@@ -22,6 +22,8 @@
     }
 
 
+    function isObjectEmpty(obj) {return obj && Object.keys(obj).length === 0 && obj.constructor === Object;}  // https://stackoverflow.com/a/32108184
+
     // Setup? ------------------------------------------------------------------
 
 
@@ -138,6 +140,11 @@
         }
     }
 
+    class Jet extends AbstractEnemy {
+        constructor(point, velocity) {
+            super(point, velocity);
+        }
+    }
 
     const state = {
         running: true,
@@ -153,7 +160,9 @@
             fire: 0,
         },
         enemies: {
-            jets: [],
+            jets: [
+                new Jet([0,30], [1,0]),
+            ],
             heli: [],
             paratrooper: [],
             paratrooper_ground: [],
@@ -217,8 +226,16 @@
         for (let bullet of state.bullets) {bullet.move();}
         filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
 
+        for (let enemy of [
+            ...state.enemies.jets,
+            ...state.enemies.heli,
+            ...state.enemies.paratrooper,
+        ]) {enemy.move();}
+
         state.frame++;
     }
+
+
     function render(c, state) {
         clearScreen(c);
 
@@ -243,8 +260,13 @@
         
         c.fillText(state.bullets.length, 200, 200);
 
-        if (sprites.jet1) {
-            c.putImageData(sprites['jet1'], state.frame, 50);
+        
+
+        if (!isObjectEmpty(sprites)) {
+            for (let jet of state.enemies.jets) {
+                c.putImageData(sprites['jet1'], ...jet.point);
+            }
+            
         }
 
     }
