@@ -48,13 +48,26 @@
             for (let [name, location] of Object.entries(sprite_location_data)) {
                 sprite_output[name] = c.getImageData(...location);
             }
+
+            /*
+            const ss = sprite_output['heli1'];
+            const nn = c.createImageData(ss);
+            function copy_pixel(source, sx, sy, destination, dx, dy) {
+                pixel = source
+            }
+            for (let i=0 ; i < ss.data.length/4 ; i++) {
+                const [x, y] = [i%ss.width, Math.floor(i/ss.width)];
+                nn[x + y*ss.width] = ss[x + y*ss.width];
+            }
+            sprite_output['heli1_flipped'] = nn;
+            */
         };
-        image.src = "data:image/png;base64,"+base64;
+        image.src = base64;
     }
 
     const sprites = {};
     loadBase64Images(
-        "iVBORw0KGgoAAAANSUhEUgAAAEoAAAAwCAYAAAC2aezWAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AYht+mSkWqDnYQcchQBcGCqIhjqWIRLJS2QqsOJpf+QZOGJMXFUXAtOPizWHVwcdbVwVUQBH9A3NycFF2kxO+SQosY7zju4b3vfbn7DhAaFaaaXZOAqllGKh4Ts7lVMfAKP/ppAuMSM/VEejEDz/F1Dx/f7yI8y7vuz9Gn5E0G+ETiKNMNi3iDeHbT0jnvE4dYSVKIz4knDLog8SPXZZffOBcdFnhmyMik5olDxGKxg+UOZiVDJZ4hDiuqRvlC1mWF8xZntVJjrXvyFwbz2kqa67RGEMcSEkhChIwayqjAQoR2jRQTKTqPefiHHX+SXDK5ymDkWEAVKiTHD/4Hv3trFqan3KRgDOh+se2PUSCwCzTrtv19bNvNE8D/DFxpbX+1Acx9kl5va+EjYGAbuLhua/IecLkDDD3pkiE5kp+WUCgA72f0TTlg8BboXXP71jrH6QOQoV4t3wAHh8BYkbLXPd7d09m3f2ta/fsBQINyk4GMT3IAAAAGYktHRAD/AP8A/6C9p5MAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQflAw4OHwGd4T5wAAABiElEQVRo3u1ay5LDMAgzmf1F9yPrj6SHJjPZ1EkMBrZeSzM9JAdhhPCroczMaUUhomQMb/4wrIlwSon3SY3CH4Vl/1CIkmcy3vyhrvKovDd/BH4sKv88PNPNXOTNH+oqyS/zJ6L5Q+eonrnncXhnmYw3fwuIMzMVIs7Mj+d7UL8GlK/HQ4X2rqklSSuPK/8w7Vdrl00gT/4wR23J0FpqqwEcK73F8OIPEUqLzS1U9IPm3CecJLY0Vk9eHxOq56QascK1xlikateW6KtlW1pFKb8mjjZGfaNyguOkyg17HG/+kBi1SrSQa8SK4veIQRK7ti40zCw+Znjz98YwT0abRAR/TwxVVS6X1M79jTd/VIx0tiltffcN/JoYpCG03D1781vFoDvSoe+5PY4wd6rPLpjoIDyzWOLT/KxiLQmAULbXDJJTdx74P7kosWYXCa1n6arpWw6OMnQV3ARH2bkKbroT648+hEDr/Zfbgz1wHyVAZh76e0u03re56awN4SgAQgEAAAAAIMUL9udvQPJcSDgAAAAASUVORK5CYII=",
+        "data:image/gif;base64,R0lGODlhSgAwAMIDAAAAAP9V/1X//////////////////////yH5BAEKAAQALAAAAABKADAAAAP+KErc/lAJSKu9VAAwcdWcJ47ZFpINeKIspnbs286fyUm4NOyDo945HK9Hu/xsSM7Ql2wqeUXL0bkRLBlTqhUadQQIgV9gTB6bcoywrVw+47oRqhaMlTthcDohyEc3vn2BeHkjYyRsiGwXiYotO1GPRZEWXxVDV2kYl1x/F5uTXp88NpehogOkmGCnqCalXg6XTa+ZBLJJtJW2Q7OqnnJEv1TBFq1OxJrHI8ZIyMXKKKLRn9ObM3jYItkp2j7eUoJvH+ES4OSDWOWE6yN97O/j7vDze+H08OT37/n667oU//rBCdipGCeBGAjWomANoQeCChlIc7gIQkRbY3ZkpJhMEJbBhhwr/LvYw5qzkAVJErkCCmWskw9KKijp0qCIkjRrZlCnSaJOcCRa/vSBzubQCFhu+jz6rejLp0z3JO3ZAGbUq1izat3KtSvXBAA7",
         {
             jet1: [0,0,24,10],
             jet2: [24,0,24,10],
@@ -80,6 +93,7 @@
     }
 
 
+    // Objects -----------------------------------------------------------------
 
     class AbstractGameObject {
         constructor(point, velocity) {
@@ -128,9 +142,9 @@
     }
 
     class AbstractEnemy extends AbstractGameObject {
-        constructor(point, velocity) {
+        constructor(point, velocity, bounds) {
             super(point, velocity);
-            this.bounds = [24, 10];
+            this.bounds = bounds;
         }
         isPointInBounds(point) {
             const [px, py] = point;
@@ -142,15 +156,32 @@
 
     class Jet extends AbstractEnemy {
         constructor(point, velocity) {
-            super(point, velocity);
+            super(point, velocity, [24, 10]);
         }
     }
+
+    class Heli extends AbstractEnemy {
+        constructor(point, velocity) {
+            super(point, velocity, [24, 10]);
+        }
+    }
+
+    class Paratrooper extends AbstractEnemy {
+        constructor(point, velocity) {
+            super(point, velocity, [4, 8]);
+        }
+    }
+
+
+
+    // State -------------------------------------------------------------------
 
     const state = {
         running: true,
         frame: 0,
         input: {
         },
+        ground: h - 20,
         gun: {
             pos: [w/2, h*0.80],
             length: 20,
@@ -160,13 +191,17 @@
             fire: 0,
         },
         enemies: {
-            jets: [
+            jet: [
                 new Jet([0,30], [1,0]),
             ],
-            heli: [],
-            paratrooper: [],
-            paratrooper_ground: [],
-            bombs: [],
+            heli: [
+                new Heli([w, 44], [-1,0]),
+            ],
+            paratrooper: [
+                new Paratrooper([100,0], [0,1]),
+            ],
+            trooper: [],
+            bomb: [],
         },
         particles: [],
         bullets: [],
@@ -212,6 +247,7 @@
 
 
     function incrementModel(state) {
+        // Fire Gun
         if (state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
             const v = 1;
             const angle = state.gun.angle;
@@ -223,14 +259,28 @@
             );
         }
 
-        for (let bullet of state.bullets) {bullet.move();}
-        filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
-
+        // Move
         for (let enemy of [
-            ...state.enemies.jets,
+            ...state.enemies.jet,
             ...state.enemies.heli,
             ...state.enemies.paratrooper,
+            ...state.bullets,
         ]) {enemy.move();}
+
+        // Bullets
+        filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
+        filterInPlace(state.enemies.paratrooper, function (p) {
+            if (p.point[1] > state.ground) {
+                if (p.velocity[1] <= 1) {
+                    state.enemies.trooper.push(p);
+                }
+                else {
+                    //die?
+                }
+                return false;
+            }
+            return true;
+        });
 
         state.frame++;
     }
@@ -263,10 +313,24 @@
         
 
         if (!isObjectEmpty(sprites)) {
-            for (let jet of state.enemies.jets) {
-                c.putImageData(sprites['jet1'], ...jet.point);
+            const frame = Math.floor(state.frame / 4);
+            const sprite_jet = sprites[`jet${(frame%2)+1}`];
+            for (let jet of state.enemies.jet) {
+                c.putImageData(sprite_jet, ...jet.point);
             }
-            
+            const sprite_heli = sprites[`heli${(frame%3)+1}`];
+            //const sprite_heli = sprites['heli1_flipped'];
+            for (let heli of state.enemies.heli) {
+                c.putImageData(sprite_heli, ...heli.point);  //-heli.bounds[0], heli.bounds[1]
+            }
+            const sprite_paratrooper = sprites['trooper'];  // inconsistent naming
+            for (let paratrooper of state.enemies.paratrooper) {
+                c.putImageData(sprite_paratrooper, ...paratrooper.point);
+            }
+            for (let trooper of state.enemies.trooper) {
+                c.putImageData(sprite_paratrooper, ...trooper.point);
+            }
+
         }
 
     }
