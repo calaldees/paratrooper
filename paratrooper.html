@@ -24,6 +24,34 @@
 
     function isObjectEmpty(obj) {return obj && Object.keys(obj).length === 0 && obj.constructor === Object;}  // https://stackoverflow.com/a/32108184
 
+
+    function mod(n, m) {return ((n % m) + m) % m;}
+    class Dimension {
+        constructor(...dimensions) {
+            this.dimensions = [...dimensions];
+        }
+        get width() {return this.dimensions[0];}
+        get height() {return this.dimensions[1];}
+        get size() {return this.dimensions.reduce((prev, current) => prev * current);}
+        normalise_position(...position) {
+            return [ // TODO: remove duplication? map?
+                mod(position[0], this.dimensions[0]),
+                mod(position[1], this.dimensions[1]),
+            ];
+        }
+        index_to_position(i) {
+            return [
+                mod(i, this.width),
+                mod(Math.floor(i/this.width), this.height),
+            ];
+        }
+        position_to_index(...position) {
+            const _position = this.normalise_position(...position);
+            return (this.width * _position[1]) + _position[0];
+        }
+    }
+
+
     // Setup? ------------------------------------------------------------------
 
 
@@ -39,6 +67,20 @@
     }
 
 
+    function flipX(imageData) {
+        const d = new Dimension(imageData.width, imageData.height);
+        const _imageData = c.createImageData(imageData);
+        for (let y=0 ; y<d.height; y++) {
+            for (let x=0 ; x<d.width; x++) {
+                const i = d.position_to_index(d.width-1-x, y);
+                const _i = d.position_to_index(x, y);
+                // copy in multiples of 4 as each pixel is 4 bytes RGBA
+                _imageData.data.set(imageData.data.slice(i*4, (i+1)*4), _i*4);
+            }
+        }
+        return _imageData;
+    }
+
     function loadBase64Images(base64, sprite_location_data, sprite_output) {
         const image = new Image();
         image.onload = function() {
@@ -46,21 +88,15 @@
             c.fillRect(0, 0, w, h);
             c.drawImage(image, 0, 0);
             for (let [name, location] of Object.entries(sprite_location_data)) {
-                sprite_output[name] = c.getImageData(...location);
+                if (typeof location === "string") {
+                    sprite_output[name] = flipX(sprite_output[location.split(' ')[1]]);
+                }
+                else {
+                    sprite_output[name] = c.getImageData(...location);
+                }
             }
 
-            /*
-            const ss = sprite_output['heli1'];
-            const nn = c.createImageData(ss);
-            function copy_pixel(source, sx, sy, destination, dx, dy) {
-                pixel = source
-            }
-            for (let i=0 ; i < ss.data.length/4 ; i++) {
-                const [x, y] = [i%ss.width, Math.floor(i/ss.width)];
-                nn[x + y*ss.width] = ss[x + y*ss.width];
-            }
-            sprite_output['heli1_flipped'] = nn;
-            */
+            sprite_output['heli1_flipped'] = flipX(sprite_output['heli1']);
         };
         image.src = base64;
     }
@@ -76,6 +112,11 @@
             heli3: [48,10,24,10],
             parachute: [0,20,12,14],
             trooper: [4,34, 4, 8],
+            jet1_flipX: 'flipX jet1',
+            jet1_flipX: 'flipX jet2',
+            heli1_flipX: 'flipX heli1',
+            heli2_flipX: 'flipX heli2',
+            heli3_flipX: 'flipX heli3',
         },
         sprites,
     );
@@ -318,8 +359,8 @@
             for (let jet of state.enemies.jet) {
                 c.putImageData(sprite_jet, ...jet.point);
             }
-            const sprite_heli = sprites[`heli${(frame%3)+1}`];
-            //const sprite_heli = sprites['heli1_flipped'];
+            const sprite_heli = sprites[`heli${(frame%3)+1}_flipX`];
+            //const sprite_heli = sprites['heli1_flipX'];
             for (let heli of state.enemies.heli) {
                 c.putImageData(sprite_heli, ...heli.point);  //-heli.bounds[0], heli.bounds[1]
             }
