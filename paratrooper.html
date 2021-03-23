@@ -89,14 +89,13 @@
             c.drawImage(image, 0, 0);
             for (let [name, location] of Object.entries(sprite_location_data)) {
                 if (typeof location === "string") {
+                    // HACK: my god ... please help
                     sprite_output[name] = flipX(sprite_output[location.split(' ')[1]]);
                 }
                 else {
                     sprite_output[name] = c.getImageData(...location);
                 }
             }
-
-            sprite_output['heli1_flipped'] = flipX(sprite_output['heli1']);
         };
         image.src = base64;
     }
@@ -113,10 +112,11 @@
             parachute: [0,20,12,14],
             trooper: [4,34, 4, 8],
             jet1_flipX: 'flipX jet1',
-            jet1_flipX: 'flipX jet2',
+            jet2_flipX: 'flipX jet2',
             heli1_flipX: 'flipX heli1',
             heli2_flipX: 'flipX heli2',
             heli3_flipX: 'flipX heli3',
+            // skull death?
         },
         sprites,
     );
@@ -232,15 +232,9 @@
             fire: 0,
         },
         enemies: {
-            jet: [
-                new Jet([0,30], [1,0]),
-            ],
-            heli: [
-                new Heli([w, 44], [-1,0]),
-            ],
-            paratrooper: [
-                new Paratrooper([100,0], [0,1]),
-            ],
+            jet: [],
+            heli: [],
+            paratrooper: [],
             trooper: [],
             bomb: [],
         },
@@ -257,7 +251,12 @@
         for (let i=0 ; i<num_heli ; i++) {
 
         }
+
+        state.enemies.jet.push(new Jet([0,30], [1,0]));
+        state.enemies.heli.push(new Heli([w, 44], [-1,0]));
+        state.enemies.paratrooper.push(new Paratrooper([100,0], [0,1]));
     }
+    setupLevelEnemies(state);
 
 
     document.addEventListener('mouseup', () => state.gun.fire = 0, false);
@@ -322,6 +321,22 @@
             }
             return true;
         });
+        filterInPlace(state.enemies.jet, function (j) {
+            for (let b of state.bullets) {
+                if (j.isPointInBounds(b.point)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        filterInPlace(state.enemies.heli, function (h) {
+            for (let b of state.bullets) {
+                if (h.isPointInBounds(b.point)) {
+                    return false;
+                }
+            }
+            return true;
+        });
 
         state.frame++;
     }
@@ -355,14 +370,18 @@
 
         if (!isObjectEmpty(sprites)) {
             const frame = Math.floor(state.frame / 4);
-            const sprite_jet = sprites[`jet${(frame%2)+1}`];
+
+            const frame_jet = (frame%2)+1;
+            const sprite_jet_left = sprites[`jet${frame_jet}`];
+            const sprite_jet_right = sprites[`jet${frame_jet}_flipX`];
             for (let jet of state.enemies.jet) {
-                c.putImageData(sprite_jet, ...jet.point);
+                c.putImageData(jet.velocity[0]>0 ? sprite_jet_left : sprite_jet_right, ...jet.point);
             }
-            const sprite_heli = sprites[`heli${(frame%3)+1}_flipX`];
-            //const sprite_heli = sprites['heli1_flipX'];
+            const frame_heli = (frame%3)+1;
+            const sprite_heli_left = sprites[`heli${frame_heli}`];
+            const sprite_heli_right = sprites[`heli${frame_heli}_flipX`];
             for (let heli of state.enemies.heli) {
-                c.putImageData(sprite_heli, ...heli.point);  //-heli.bounds[0], heli.bounds[1]
+                c.putImageData(heli.velocity[0]>0 ? sprite_heli_left : sprite_heli_right, ...heli.point);  //-heli.bounds[0], heli.bounds[1]
             }
             const sprite_paratrooper = sprites['trooper'];  // inconsistent naming
             for (let paratrooper of state.enemies.paratrooper) {
