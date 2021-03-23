@@ -60,6 +60,19 @@
     const w = canvas.width;
     const h = canvas.height;
 
+    document.addEventListener('mouseup', () => state.gun.fire = 0, false);
+    document.addEventListener('mousedown', () => state.gun.fire = state.frame, false);
+    document.addEventListener("pointermove", (e) => {
+        //console.log(-e.movementX, e.movementY);
+        state.gun.angle -= e.movementX/180;
+        state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
+    }, false);
+
+    function setRunning(running) {state.running = running; console.log("running", running); requestAnimationFrame(main);}
+    window.addEventListener("focus", () => {setRunning(true)}, false);
+    window.addEventListener("blur", () => {setRunning(false)}, false);
+
+
 
     function clearScreen(c) {
         c.fillStyle = 'black';
@@ -88,14 +101,10 @@
             c.fillRect(0, 0, w, h);
             c.drawImage(image, 0, 0);
             for (let [name, location] of Object.entries(sprite_location_data)) {
-                if (typeof location === "string") {
-                    // HACK: my god ... please help
-                    sprite_output[name] = flipX(sprite_output[location.split(' ')[1]]);
-                }
-                else {
-                    sprite_output[name] = c.getImageData(...location);
-                }
+                sprite_output[name] = c.getImageData(...location);
             }
+
+            loadComplete();
         };
         image.src = base64;
     }
@@ -111,11 +120,6 @@
             heli3: [48,10,24,10],
             parachute: [0,20,12,14],
             trooper: [4,34, 4, 8],
-            jet1_flipX: 'flipX jet1',
-            jet2_flipX: 'flipX jet2',
-            heli1_flipX: 'flipX heli1',
-            heli2_flipX: 'flipX heli2',
-            heli3_flipX: 'flipX heli3',
             // skull death?
         },
         sprites,
@@ -177,15 +181,23 @@
     }
 
     class Particle extends AbstractGameObject {
-        constructor(point, velocity) {
+        constructor(point, velocity, color) {
             super(point, velocity);
+            this.color = color;
         }
     }
 
     class AbstractEnemy extends AbstractGameObject {
-        constructor(point, velocity, bounds) {
+        constructor(point, velocity, sprite_names) {
             super(point, velocity);
-            this.bounds = bounds;
+            // NO NO NO!! Every construction flips the sprites? WFT! NO!!
+            this.sprites_left = sprite_names.map((name)=>sprites[name]);
+            this.sprites_right = this.sprites_left.map(flipX);
+            this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
+        }
+        get sprite() {
+            const frame = Math.floor(this.point[0] / 4) % this.sprites_left.length;
+            return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
         }
         isPointInBounds(point) {
             const [px, py] = point;
@@ -193,23 +205,26 @@
             const [iw, ih] = this.bounds;
             return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
         }
+        getParticles() {
+            this.sprite; // TODO create/yield? particles
+        }
     }
 
     class Jet extends AbstractEnemy {
         constructor(point, velocity) {
-            super(point, velocity, [24, 10]);
+            super(point, velocity, ['jet1', 'jet2']);
         }
     }
 
     class Heli extends AbstractEnemy {
         constructor(point, velocity) {
-            super(point, velocity, [24, 10]);
+            super(point, velocity, ['heli1', 'heli2', 'heli3']);
         }
     }
 
     class Paratrooper extends AbstractEnemy {
         constructor(point, velocity) {
-            super(point, velocity, [4, 8]);
+            super(point, velocity, ['trooper']);
         }
     }
 
@@ -256,21 +271,8 @@
         state.enemies.heli.push(new Heli([w, 44], [-1,0]));
         state.enemies.paratrooper.push(new Paratrooper([100,0], [0,1]));
     }
-    setupLevelEnemies(state);
 
 
-    document.addEventListener('mouseup', () => state.gun.fire = 0, false);
-    document.addEventListener('mousedown', () => state.gun.fire = state.frame, false);
-    document.addEventListener("pointermove", (e) => {
-        //console.log(-e.movementX, e.movementY);
-        state.gun.angle -= e.movementX/180;
-        state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
-    }, false);
-
-
-    function setRunning(running) {state.running = running; console.log("running", running); requestAnimationFrame(main);}
-    window.addEventListener("focus", () => {setRunning(true)}, false);
-    window.addEventListener("blur", () => {setRunning(false)}, false);
 
 
     //-----------
@@ -300,12 +302,13 @@
         }
 
         // Move
-        for (let enemy of [
+        for (let game_object of [
             ...state.enemies.jet,
             ...state.enemies.heli,
             ...state.enemies.paratrooper,
             ...state.bullets,
-        ]) {enemy.move();}
+            ...state.particles,
+        ]) {game_object.move();}
 
         // Bullets
         filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
@@ -366,36 +369,22 @@
         
         c.fillText(state.bullets.length, 200, 200);
 
-        
-
-        if (!isObjectEmpty(sprites)) {
-            const frame = Math.floor(state.frame / 4);
-
-            const frame_jet = (frame%2)+1;
-            const sprite_jet_left = sprites[`jet${frame_jet}`];
-            const sprite_jet_right = sprites[`jet${frame_jet}_flipX`];
-            for (let jet of state.enemies.jet) {
-                c.putImageData(jet.velocity[0]>0 ? sprite_jet_left : sprite_jet_right, ...jet.point);
-            }
-            const frame_heli = (frame%3)+1;
-            const sprite_heli_left = sprites[`heli${frame_heli}`];
-            const sprite_heli_right = sprites[`heli${frame_heli}_flipX`];
-            for (let heli of state.enemies.heli) {
-                c.putImageData(heli.velocity[0]>0 ? sprite_heli_left : sprite_heli_right, ...heli.point);  //-heli.bounds[0], heli.bounds[1]
-            }
-            const sprite_paratrooper = sprites['trooper'];  // inconsistent naming
-            for (let paratrooper of state.enemies.paratrooper) {
-                c.putImageData(sprite_paratrooper, ...paratrooper.point);
-            }
-            for (let trooper of state.enemies.trooper) {
-                c.putImageData(sprite_paratrooper, ...trooper.point);
-            }
-
+        for (let enemy of [
+            ...state.enemies.jet,
+            ...state.enemies.heli,
+            ...state.enemies.paratrooper,
+            ...state.enemies.trooper,
+        ]) {
+            c.putImageData(enemy.sprite, ...enemy.point);
         }
 
     }
 
 
+    function loadComplete() {
+        setupLevelEnemies(state);
+        main();
+    }
 
     function main(time) {
         if (c) {  /// is this needed?
@@ -406,7 +395,6 @@
             requestAnimationFrame(main);
         }
     }
-    main();
 
 </script>
 </body>
