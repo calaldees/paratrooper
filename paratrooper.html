@@ -93,6 +93,12 @@
         }
         return _imageData;
     }
+    function flipX_sprites(sprite_object) {
+        // Take a sprite object with each key as a sprite. Flip all sprites and inset as new key with `_flipX` appended
+        for (let key of Object.keys(sprite_object)) {
+            sprite_object[`${key}_flipX`] = flipX(sprite_object[key]);
+        }
+    }
 
     function loadBase64Images(base64, sprite_location_data, sprite_output) {
         const image = new Image();
@@ -104,6 +110,7 @@
                 sprite_output[name] = c.getImageData(...location);
             }
 
+            flipX_sprites(sprite_output);
             loadComplete();
         };
         image.src = base64;
@@ -185,18 +192,21 @@
             super(point, velocity);
             this.color = color;
         }
+        move() {
+            super.move();
+            this.velocity[1] = this.velocity[1] + 0.08;
+        }
     }
 
     class AbstractEnemy extends AbstractGameObject {
         constructor(point, velocity, sprite_names) {
             super(point, velocity);
-            // NO NO NO!! Every construction flips the sprites? WFT! NO!!
             this.sprites_left = sprite_names.map((name)=>sprites[name]);
-            this.sprites_right = this.sprites_left.map(flipX);
+            this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
             this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
         }
         get sprite() {
-            const frame = Math.floor(this.point[0] / 4) % this.sprites_left.length;
+            const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
             return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
         }
         isPointInBounds(point) {
@@ -205,8 +215,25 @@
             const [iw, ih] = this.bounds;
             return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
         }
-        getParticles() {
-            this.sprite; // TODO create/yield? particles
+        * particles(velocity=[0,0]) {
+            const s = this.sprite;
+            const d = new Dimension(s.width, s.height);
+            for (let i=0 ; i<s.data.length ; i+=4) {
+                const c = s.data.slice(i, i+4);
+                if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors do not create particles
+                const [x, y] = d.index_to_position(i);
+                yield new Particle(
+                    [
+                        x + this.point[0],
+                        y + this.point[1],
+                    ],
+                    [
+                        this.velocity[0] + velocity[0]*1.5 + (Math.random() - 0.5),
+                        this.velocity[1] + velocity[1]*1.5 + (Math.random() - 0.5),
+                    ],
+                    `rgb(${c[0]},${c[1]},${c[2]})`,
+                );
+            }
         }
     }
 
@@ -312,6 +339,7 @@
 
         // Bullets
         filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
+        filterInPlace(state.particles, (p) => !isPointOutOfScreenBounds(p.point));
         filterInPlace(state.enemies.paratrooper, function (p) {
             if (p.point[1] > state.ground) {
                 if (p.velocity[1] <= 1) {
@@ -327,6 +355,7 @@
         filterInPlace(state.enemies.jet, function (j) {
             for (let b of state.bullets) {
                 if (j.isPointInBounds(b.point)) {
+                    for (let p of j.particles(b.velocity)) {state.particles.push(p);}
                     return false;
                 }
             }
@@ -335,6 +364,7 @@
         filterInPlace(state.enemies.heli, function (h) {
             for (let b of state.bullets) {
                 if (h.isPointInBounds(b.point)) {
+                    for (let p of h.particles(b.velocity)) {state.particles.push(p);}
                     return false;
                 }
             }
@@ -367,6 +397,11 @@
             c.fillRect(...bullet.pointInt, 2, 2);
         }
         
+        for (let p of state.particles) {
+            c.fillStyle = p.color;
+            c.fillRect(...p.pointInt, 1, 1);
+        }
+
         c.fillText(state.bullets.length, 200, 200);
 
         for (let enemy of [
