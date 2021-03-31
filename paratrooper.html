@@ -199,16 +199,11 @@
     }
 
     class AbstractEnemy extends AbstractGameObject {
-        constructor(point, velocity, sprite_names) {
+        constructor(point, velocity) {
             super(point, velocity);
-            this.sprites_left = sprite_names.map((name)=>sprites[name]);
-            this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
-            this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
+            //this.bounds /// abstract
         }
-        get sprite() {
-            const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
-            return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
-        }
+        //get sprite() {}  // abstract
         // This may not be sufficient for fast moving bullets ... we may need line crossing?
         isPointInBounds(point) {
             const [px, py] = point;
@@ -240,7 +235,16 @@
 
 
     class AbstractEnemyAnimated extends AbstractEnemy {
-
+        constructor(point, velocity, sprite_names) {
+            super(point, velocity);
+            this.sprites_left = sprite_names.map((name)=>sprites[name]);
+            this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
+            this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
+        }
+        get sprite() {
+            const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
+            return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
+        }
     }
 
 
@@ -274,10 +278,28 @@
 
     class Paratrooper extends AbstractEnemy {
         constructor(point, velocity) {
-            super(point, velocity, ['trooper']);
+            super(point, velocity);
+            this.sprites = {};  // TODO
+            this.bounds = [4 ,8]; //TODO? from sprite?
             this.parachute_threshold = point[1] + (Math.random() * h/2);
         }
-
+        get sprite() {
+            return sprites['trooper'];
+        }
+        get parachuteOpen() {
+            return false;
+        }
+        isPointInBounds(point) {
+            if (this.parachuteOpen) {
+                // Do additional collision detection for parachute?
+            }
+            return super.isPointInBounds(point);
+        }
+        move() {
+            // no paracute - accelerate to?
+            // paracute - slow to?
+            super.move();
+        }
     }
 
 
@@ -445,6 +467,12 @@
             ...state.enemies.trooper,
         ]) {
             c.putImageData(enemy.sprite, ...enemy.point);
+        }
+        // draw parachutes separately
+        for (let paratrooper of state.enemies.paratrooper){
+            if (paratrooper.parachuteOpen) {
+                c.putImageData(sprites['parachute'], paratrooper.point[0]-4, paratrooper.point[1]-14);
+            }
         }
 
     }
