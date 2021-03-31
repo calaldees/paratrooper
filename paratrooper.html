@@ -209,6 +209,7 @@
             const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
             return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
         }
+        // This may not be sufficient for fast moving bullets ... we may need line crossing?
         isPointInBounds(point) {
             const [px, py] = point;
             const [ix, iy] = this.point;
@@ -228,8 +229,8 @@
                         y + this.point[1],
                     ],
                     [
-                        this.velocity[0] + velocity[0]*1.5 + (Math.random() - 0.5),
-                        this.velocity[1] + velocity[1]*1.5 + (Math.random() - 0.5),
+                        this.velocity[0] + velocity[0]*0.8 + (Math.random() - 0.5),
+                        this.velocity[1] + velocity[1]*0.8 + (Math.random() - 0.5),
                     ],
                     `rgb(${c[0]},${c[1]},${c[2]})`,
                 );
@@ -237,22 +238,46 @@
         }
     }
 
-    class Jet extends AbstractEnemy {
+
+    class AbstractEnemyAnimated extends AbstractEnemy {
+
+    }
+
+
+    class Jet extends AbstractEnemyAnimated {
         constructor(point, velocity) {
             super(point, velocity, ['jet1', 'jet2']);
         }
     }
 
-    class Heli extends AbstractEnemy {
-        constructor(point, velocity) {
+    class Heli extends AbstractEnemyAnimated {
+        constructor(point, velocity, number_of_paratroopers=2) {
             super(point, velocity, ['heli1', 'heli2', 'heli3']);
+            this.paratroopers = [];
+            for (let t=0 ; t<number_of_paratroopers ; t++) {
+                this.paratroopers.push(new Paratrooper([Math.floor(Math.random()*w), point[1]], [0, 1]));
+            }
+        }
+        get paratrooper() {
+            const _this = this;
+            let return_paratrooper = undefined;
+            filterInPlace(this.paratroopers, function(paratrooper){
+                if (Math.abs(_this.point[0] - paratrooper.point[0]) < 3) {
+                    return_paratrooper = paratrooper;
+                    return false;
+                }
+                return true;
+            })
+            return return_paratrooper;
         }
     }
 
     class Paratrooper extends AbstractEnemy {
         constructor(point, velocity) {
             super(point, velocity, ['trooper']);
+            this.parachute_threshold = point[1] + (Math.random() * h/2);
         }
+
     }
 
 
@@ -267,6 +292,7 @@
         ground: h - 20,
         gun: {
             pos: [w/2, h*0.80],
+            velocity: 3,
             length: 20,
             angle: Math.PI,
             angle_min: Math.PI - (Math.PI/2),
@@ -296,7 +322,7 @@
 
         state.enemies.jet.push(new Jet([0,30], [1,0]));
         state.enemies.heli.push(new Heli([w, 44], [-1,0]));
-        state.enemies.paratrooper.push(new Paratrooper([100,0], [0,1]));
+        //state.enemies.paratrooper.push(new Paratrooper([100,0], [0,1]));
     }
 
 
@@ -318,12 +344,12 @@
     function incrementModel(state) {
         // Fire Gun
         if (state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
-            const v = 1;
+            const velocity = state.gun.velocity;
             const angle = state.gun.angle;
             state.bullets.push(
                 new Bullet(
                     gun_tip_pos(state.gun), // used named params here?
-                    [Math.sin(angle) * v, Math.cos(angle) * v],
+                    [Math.sin(angle) * velocity, Math.cos(angle) * velocity],
                 )
             );
         }
@@ -337,12 +363,20 @@
             ...state.particles,
         ]) {game_object.move();}
 
+        // Launch Paratroopers
+        for (let heli of state.enemies.heli) {
+            let paratrooper = heli.paratrooper;
+            if (paratrooper) {
+                state.enemies.paratrooper.push(paratrooper);
+            }
+        }
+
         // Bullets
         filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
         filterInPlace(state.particles, (p) => !isPointOutOfScreenBounds(p.point));
         filterInPlace(state.enemies.paratrooper, function (p) {
             if (p.point[1] > state.ground) {
-                if (p.velocity[1] <= 1) {
+                if (p.velocity[1] < 1) {
                     state.enemies.trooper.push(p);
                 }
                 else {
