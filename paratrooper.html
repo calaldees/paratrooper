@@ -127,7 +127,7 @@
             heli3: [48,10,24,10],
             parachute: [0,20,12,14],
             trooper: [4,34, 4, 8],
-            // skull death?
+            trooper_dead: [17,27, 12, 15],
         },
         sprites,
     );
@@ -195,6 +195,21 @@
         move() {
             super.move();
             this.velocity[1] = this.velocity[1] + 0.08;
+        }
+    }
+
+    class TimedSprite extends AbstractGameObject {
+        constructor(point, sprite, time_to_live=60) {
+            super(point, [0, 0]);
+            this.sprite = sprite;
+            this.time_to_live = time_to_live;
+        }
+        get alive() {
+            return (this.time_to_live>0);
+        }
+        move() {
+            super.move();
+            this.time_to_live--;
         }
     }
 
@@ -280,24 +295,37 @@
         constructor(point, velocity) {
             super(point, velocity);
             this.sprites = {};  // TODO
-            this.bounds = [4 ,8]; //TODO? from sprite?
-            this.parachute_threshold = point[1] + (Math.random() * h/2);
+            this.bounds = [4, 8]; //TODO? from sprite?
+            this.parachute_threshold = point[1] + (Math.random() * h/4) + h/8;
         }
         get sprite() {
             return sprites['trooper'];
         }
         get parachuteOpen() {
-            return false;
+            return (
+                this.parachute_threshold > 0 &&
+                this.point[1] > this.parachute_threshold
+            );
         }
         isPointInBounds(point) {
             if (this.parachuteOpen) {
                 // Do additional collision detection for parachute?
+                const [px, py] = point;
+                const [ix, iy] = [this.point[0]-4, this.point[1]-14];  // hard coded offset - same as render
+                const [iw, ih] = [sprites['parachute'].width, sprites['parachute'].height];
+                const parachuteHit = (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+                if (parachuteHit) {
+                    this.parachute_threshold = -1;
+                }
             }
             return super.isPointInBounds(point);
         }
         move() {
-            // no paracute - accelerate to?
-            // paracute - slow to?
+            if (this.parachuteOpen) {
+                this.velocity[1] = Math.max(this.velocity[1]+=-0.1, 0.5);
+            } else {
+                this.velocity[1] = Math.max(this.velocity[1]+=0.08, 0.8);
+            }
             super.move();
         }
     }
@@ -330,6 +358,7 @@
         },
         particles: [],
         bullets: [],
+        timed_sprites: [],
         level: 1,
     };
 
@@ -383,6 +412,7 @@
             ...state.enemies.paratrooper,
             ...state.bullets,
             ...state.particles,
+            ...state.timed_sprites,
         ]) {game_object.move();}
 
         // Launch Paratroopers
@@ -394,15 +424,25 @@
         }
 
         // Bullets
+        filterInPlace(state.timed_sprites, (s) => s.alive);
         filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
         filterInPlace(state.particles, (p) => !isPointOutOfScreenBounds(p.point));
-        filterInPlace(state.enemies.paratrooper, function (p) {
-            if (p.point[1] > state.ground) {
-                if (p.velocity[1] < 1) {
-                    state.enemies.trooper.push(p);
+        filterInPlace(state.enemies.paratrooper, function (pt) {
+            for (let b of state.bullets) {
+                if (pt.isPointInBounds(b.point)) {
+                    for (let p of pt.particles(b.velocity)) {state.particles.push(p);}
+                    return false;
+                }
+            }
+            if (pt.point[1] > state.ground) {
+                if (pt.velocity[1] < 1) {
+                    state.enemies.trooper.push(pt);
                 }
                 else {
-                    //die?
+                    state.timed_sprites.push(
+                        new TimedSprite(pt.point, sprites['trooper_dead'])
+                    );
+                    filterInPlace(state.enemies.trooper, (t) => Math.abs(t.point[0] - pt.point[0]) > 5);
                 }
                 return false;
             }
@@ -460,13 +500,14 @@
 
         c.fillText(state.bullets.length, 200, 200);
 
-        for (let enemy of [
+        for (let game_object of [
             ...state.enemies.jet,
             ...state.enemies.heli,
             ...state.enemies.paratrooper,
             ...state.enemies.trooper,
+            ...state.timed_sprites,
         ]) {
-            c.putImageData(enemy.sprite, ...enemy.point);
+            c.putImageData(game_object.sprite, ...game_object.point);
         }
         // draw parachutes separately
         for (let paratrooper of state.enemies.paratrooper){
