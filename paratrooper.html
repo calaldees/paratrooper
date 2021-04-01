@@ -136,7 +136,7 @@
 
     const sprites = {};
     loadBase64Images(
-        "data:image/gif;base64,R0lGODlhSgAwAMIDAAAAAP9V/1X//////////////////////yH5BAEKAAQALAAAAABKADAAAAP+KErc/lAJSKu9VAAwcdWcJ47ZFpINeKIspnbs286fyUm4NOyDo945HK9Hu/xsSM7Ql2wqeUXL0bkRLBlTqhUadQQIgV9gTB6bcoywrVw+47oRqhaMlTthcDohyEc3vn2BeHkjYyRsiGwXiYotO1GPRZEWXxVDV2kYl1x/F5uTXp88NpehogOkmGCnqCalXg6XTa+ZBLJJtJW2Q7OqnnJEv1TBFq1OxJrHI8ZIyMXKKKLRn9ObM3jYItkp2j7eUoJvH+ES4OSDWOWE6yN97O/j7vDze+H08OT37/n667oU//rBCdipGCeBGAjWomANoQeCChlIc7gIQkRbY3ZkpJhMEJbBhhwr/LvYw5qzkAVJErkCCmWskw9KKijp0qCIkjRrZlCnSaJOcCRa/vSBzubQCFhu+jz6rejLp0z3JO3ZAGbUq1izat3KtSvXBAA7",
+        "data:image/gif;base64,R0lGODlhSgAwAMIDAAAAAP9V/1X//////////////////////yH5BAEKAAQALAAAAABKADAAAAP+KErc/lAJSKu9VAAwcdWcJ47ZFpINeKIspnbs286fyUm4NOyDo945HK832o1+tiRn6FM6lzwR04N8bgRTQtWKjWKylQAh8AuYz2ZTjkG2odFqnMd4tHLHjK19RXuItUGBcg1igoYwfTNmJG+NbxeOjy10NJQzlhR/FENgmhWcXoQXoJhspDw2nA4Bpzupna0Dr6FsDpxOqqIEt0q5eAy8Sb5fdkSjxXPIRU/GxLjLzyin0qTUoDOI2SLaKds+3xaHax/iEuHlCxHmieyJgu3wKIfx9Bfl9fgP9/n8+/z4niAE/BdvYC0LYAiKMPhr0zCFHgYy3FUN4kKBCM3s0GhTcYSniRSvdYy4CmHIKM1GhjnoEJiXUiofwJS5S0GPlDFbzqG4K6eLdV+A+aSC6AvOoepIzESap+nOnkwzOEXYbKnPDkU32YrKtavXr2DDih3rMwEAOw==",
         {
             jet1: [0,0,24,10],
             jet2: [24,0,24,10],
@@ -146,6 +146,7 @@
             parachute: [0,20,12,14],
             trooper: [4,34, 4, 8],
             trooper_dead: [17,27, 12, 15],
+            bomb: [59, 4, 4, 4],
         },
         sprites,
     );
@@ -273,6 +274,7 @@
             this.sprites_left = sprite_names.map((name)=>sprites[name]);
             this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
             this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
+            this.payloads = [];
         }
         get sprite() {
             const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
@@ -282,34 +284,34 @@
             // has object left edge of screen?
             return this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0;
         }
+        get payload() {
+            const x = this.point[0];
+            let _p = undefined;
+            filterInPlace(this.payloads, function(p){
+                if (Math.abs(x - p.point[0]) < 3) {_p = p; return false;}
+                return true;
+            })
+            return _p;
+        }
     }
 
 
     class Jet extends AbstractEnemyAnimated {
-        constructor(point, velocity) {
+        constructor(point, velocity, number_of_bombs=1) {
             super(point, velocity, ['jet1', 'jet2']);
+            if (Math.random()>0.5) {
+                const v = this.velocity[0];
+                this.payloads.push(new Bomb([v>0?100:w-100, this.point[1]], this.velocity));
+            }
         }
     }
 
     class Heli extends AbstractEnemyAnimated {
         constructor(point, velocity, number_of_paratroopers=2) {
             super(point, velocity, ['heli1', 'heli2', 'heli3']);
-            this.paratroopers = [];
             for (let t=0 ; t<number_of_paratroopers ; t++) {
-                this.paratroopers.push(new Paratrooper([Math.floor(Math.random()*w), point[1]], [0, 1]));
+                this.payloads.push(new Paratrooper([Math.floor(Math.random()*w), point[1]], [0, 1]));
             }
-        }
-        get paratrooper() {
-            const _this = this;
-            let return_paratrooper = undefined;
-            filterInPlace(this.paratroopers, function(paratrooper){
-                if (Math.abs(_this.point[0] - paratrooper.point[0]) < 3) {
-                    return_paratrooper = paratrooper;
-                    return false;
-                }
-                return true;
-            })
-            return return_paratrooper;
         }
     }
 
@@ -352,6 +354,20 @@
         }
     }
 
+    class Bomb extends AbstractEnemy {
+        constructor(point, velocity) {
+            super(point, velocity);
+            this._sprite = sprites['bomb'];
+            this.bounds = [4, 4];  // TODO: from sprite?
+        }
+        get sprite() {
+            return this._sprite;
+        }
+        move() {
+            this.velocity[1] = Math.min(this.velocity[1]+=0.03, 1.5);
+            super.move();
+        }
+    }
 
 
     // State -------------------------------------------------------------------
@@ -402,6 +418,11 @@
             const x = random_start_x();
             state.enemies.heli.push(new Heli([x, 44], [x>w?-1:1, 0], Math.floor(Math.random()*5)+1 ));
         }
+        for (let i=0 ; i<num_heli ; i++) {
+            const x = random_start_x();
+            state.enemies.jet.push(new Jet([x, 30], [x>w?-1:1, 0]));
+        }
+
 
         state.enemies.jet.push(new Jet([0,30], [1,0]));
         state.enemies.heli.push(new Heli([w, 44], [-1, 0]));
@@ -424,6 +445,13 @@
 
     //------------
 
+    function reset() {
+        state.level = 0;
+        state.score = 0;
+        for (let key of Object.keys(state.enemies)) {
+            state.enemies[key].length = 0;
+        }
+    }
 
     function incrementModel(state) {
         // End level
@@ -436,12 +464,14 @@
         const troops_left = state.enemies.trooper.filter((t)=>t.point[0] > state.gun.pos[0]).length;
         const troops_right = state.enemies.trooper.filter((t)=>t.point[0] < state.gun.pos[0]).length;
         if (troops_left>4 || troops_right>4) {
-            state.level = 0;
-            state.score = 0;
-            for (let key of Object.keys(state.enemies)) {
-                state.enemies[key].length = 0;
+            reset();
+        }
+        for (let bomb of state.enemies.bomb) {
+            if (bomb.point[1] > state.gun.pos[1]) {
+                reset();
             }
         }
+
 
         // Fire Gun
         if (state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
@@ -461,6 +491,7 @@
             ...state.enemies.jet,
             ...state.enemies.heli,
             ...state.enemies.paratrooper,
+            ...state.enemies.bomb,
             ...state.bullets,
             ...state.particles,
             ...state.timed_sprites,
@@ -468,9 +499,17 @@
 
         // Launch Paratroopers
         for (let heli of state.enemies.heli) {
-            let paratrooper = heli.paratrooper;
+            let paratrooper = heli.payload;
             if (paratrooper) {
                 state.enemies.paratrooper.push(paratrooper);
+            }
+        }
+
+        // Launch Bombs
+        for (let jet of state.enemies.jet) {
+            let bomb = jet.payload;
+            if (bomb) {
+                state.enemies.bomb.push(bomb);
             }
         }
 
@@ -520,6 +559,17 @@
             }
             return !h.expired;
         });
+        filterInPlace(state.enemies.bomb, function (bo) {
+            for (let b of state.bullets) {
+                if (bo.isPointInBounds(b.point)) {
+                    for (let p of bo.particles(b.velocity)) {state.particles.push(p);}
+                    state.score += 15;
+                    return false;
+                }
+            }
+            return true;
+        });
+
 
         state.frame++;
     }
@@ -531,8 +581,7 @@
         c.fillStyle = 'white';
         c.fillText(`Level: ${state.level}`, 80, 200);
         c.fillText(`Score: ${state.score}`, 80, 220);
-        c.fillText(state.enemies.jet.length, 200, 240);
-        c.fillText(state.enemies.heli.length, 220, 260);
+        c.fillText(state.enemies.bomb.length, 200, 240);
 
         // Gun
         const [x, y, length, angle] = [...state.gun.pos, state.gun.length, state.gun.angle];
@@ -563,6 +612,7 @@
             ...state.enemies.paratrooper,
             ...state.enemies.trooper,
             ...state.timed_sprites,
+            ...state.enemies.bomb,
         ]) {
             c.putImageData(game_object.sprite, ...game_object.point);
         }
