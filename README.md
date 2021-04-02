@@ -1,4 +1,7 @@
 # Paratrooper
+
+* [Play Paratrooper at https://calaldees.github.io/paratrooper/](https://calaldees.github.io/paratrooper/)
+
 A javascript remake of the PC DOS CGA 1982 game by [Greg Kuperberg](https://www.math.ucdavis.edu/~greg/)
 
 * https://www.bestoldgames.net/paratrooper
