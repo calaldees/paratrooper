@@ -418,6 +418,7 @@ Each bullet you fire costs you one point
         timed_sprites: [],
         level: 0,
         score: 0,
+        game_over: false,
     };
 
 
@@ -457,9 +458,23 @@ Each bullet you fire costs you one point
         ];
     }
 
+    function* particles_from_context_pixels(x,y,width,height, velocity=[0,0]) {
+        for (let _x=x ; _x < x+width ; _x++) {
+            for (let _y=y ; _y < y+height ; _y++) {
+                const [r,g,b] = c.getImageData(_x, _y, 1, 1).data;
+                yield new Particle(
+                    [_x, _y,],
+                    [velocity[0] + (Math.random() - 0.5), velocity[1] + (Math.random() - 0.5)],
+                    `rgb(${r},${g},${b})`,
+                );
+            }
+        }
+    }
+
     //------------
 
     function reset() {
+        state.game_over = false;
         state.level = 0;
         state.score = 0;
         for (let key of Object.keys(state.enemies)) {
@@ -467,16 +482,27 @@ Each bullet you fire costs you one point
         }
     }
     function endGame() {
+        if (state.game_over) {return;}
         if (state.score > state.store.hiscore || state.store.hiscore == undefined) {
             state.store['hiscore'] = state.score;
             saveLocalData(state.store);
         }
-        // TODO: explode gun? animation?
-        reset();
+        for (let p of particles_from_context_pixels(
+            state.gun.pos[0] - Math.floor(state.gun.width/2),
+            state.gun.pos[1] - state.gun.length,
+            state.gun.width,
+            state.ground - state.gun.pos[1],
+            [0, -4],
+        )) {state.particles.push(p);}
+        state.game_over = true;
     }
 
 
     function incrementModel(state) {
+        if (state.game_over && state.particles.length == 0) {
+            reset();
+        }
+
         // End level
         if (state.enemies.jet.length + state.enemies.heli.length <= 0) {
             state.level++;
@@ -548,7 +574,7 @@ Each bullet you fire costs you one point
                     return false;
                 }
             }
-            if (pt.point[1] > state.ground) {
+            if (pt.point[1] > state.ground-pt.bounds[1]) {
                 if (pt.velocity[1] < 1) {
                     state.enemies.trooper.push(pt);
                 }
@@ -628,7 +654,10 @@ Each bullet you fire costs you one point
             c.fillRect(x-width, y, width*2, state.ground-y);
 
         }
-        drawGun(state.gun);
+        if (!state.game_over) {
+            drawGun(state.gun);
+        }
+        
 
         // Ground
         c.strokeStyle = 'cyan';
