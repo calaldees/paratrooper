@@ -106,13 +106,6 @@ Each bullet you fire costs you one point
     window.addEventListener("blur", () => {setRunning(false)}, false);
 
 
-
-    function clearScreen(c) {
-        c.fillStyle = 'black';
-        c.fillRect(0, 0, w, h);
-    }
-
-
     function flipX(imageData) {
         const d = new Dimension(imageData.width, imageData.height);
         const _imageData = c.createImageData(imageData);
@@ -173,11 +166,6 @@ Each bullet you fire costs you one point
     Points are arrays of two elements e.g [x, y] -> [10, 87]
     */
 
-    function isPointOutOfScreenBounds(point) {
-        const [x, y] = point;
-        return (x < 0 || x > w || y < -20 || y > w);
-    }
-
 
     // Objects -----------------------------------------------------------------
 
@@ -194,6 +182,10 @@ Each bullet you fire costs you one point
         }
         set point(point) {
             this.point_current.splice(0,2, ...point);
+        }
+        get isOutOfScreenBounds() {
+            const [x, y] = this.point;
+            return (x < 0 || x > w || y < -20 || y > w);
         }
         move() {
             this.point = [
@@ -394,9 +386,10 @@ Each bullet you fire costs you one point
         },
         ground: h - 20,
         gun: {
-            pos: [w/2, h*0.80],
+            pos: [w/2, h-24-20],
+            width: 32,
             velocity: 3,
-            length: 20,
+            length: 12,
             angle: Math.PI,
             angle_min: Math.PI - (Math.PI/2),
             angle_max: Math.PI + (Math.PI/2),
@@ -438,11 +431,6 @@ Each bullet you fire costs you one point
             state.enemies.jet.push(new Jet([x, 30], [x>w?-1:1, 0]));
         }
 
-
-        state.enemies.jet.push(new Jet([0,30], [1,0]));
-        state.enemies.heli.push(new Heli([w, 44], [-1, 0]));
-        
-        //state.enemies.paratrooper.push(new Paratrooper([100,0], [0,1]));
     }
 
 
@@ -530,8 +518,8 @@ Each bullet you fire costs you one point
 
         // Bullets
         filterInPlace(state.timed_sprites, (s) => s.alive);
-        filterInPlace(state.bullets, (b) => !isPointOutOfScreenBounds(b.point));
-        filterInPlace(state.particles, (p) => !isPointOutOfScreenBounds(p.point));
+        filterInPlace(state.bullets, (b) => !b.isOutOfScreenBounds);
+        filterInPlace(state.particles, (p) => !p.isOutOfScreenBounds);
         filterInPlace(state.enemies.paratrooper, function (pt) {
             for (let b of state.bullets) {
                 if (pt.isPointInBounds(b.point)) {
@@ -591,24 +579,55 @@ Each bullet you fire costs you one point
 
 
     function render(c, state) {
-        clearScreen(c);
+        c.fillStyle = 'black';
+        c.fillRect(0, 0, w, h);
+
+        // Side buffers
+        c.fillStyle = 'magenta';
+        c.fillRect(0, h-60, 60, 60);
+        c.fillRect(w-60, h-60, 60, 60);
+        // Ground
+        c.strokeStyle = 'cyan';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(0, state.ground);
+        c.lineTo(w, state.ground);
+        c.stroke();
+
+        
+        function drawGun(gun) {
+            const [x, y, length, angle, width] = [...gun.pos, gun.length, gun.angle, Math.floor(gun.width/2)];
+            c.lineCap = "round";
+            // Gun Barrel
+            c.beginPath();
+            c.strokeStyle = 'cyan';
+            c.lineWidth = 4;
+            c.moveTo(x, y);
+            c.lineTo(
+                x + Math.sin(angle) * length,
+                y + Math.cos(angle) * length,
+            );
+            c.stroke();
+            // Gun Turret
+            c.beginPath();
+            c.strokeStyle = 'magenta';
+            c.lineWidth = 8;
+            c.moveTo(x, y);
+            c.lineTo(x, y+16);
+            c.stroke();
+            // Gun Base
+            c.fillStyle = 'white';
+            c.fillRect(x-width, y, width*2, state.ground-y);
+
+        }
+        drawGun(state.gun);
+
 
         c.fillStyle = 'white';
-        c.fillText(`Level: ${state.level}`, 80, 200);
-        c.fillText(`Score: ${state.score}`, 80, 220);
-        c.fillText(state.enemies.bomb.length, 200, 240);
+        c.fillText(`Level: ${state.level}`, 80, h-6);
+        c.fillText(`Score: ${state.score}`, 160, h-6);
 
-        // Gun
-        const [x, y, length, angle] = [...state.gun.pos, state.gun.length, state.gun.angle];
-        c.beginPath();
-        c.strokeStyle = 'cyan';
-        c.lineWidth = 4;
-        c.moveTo(x, y);
-        c.lineTo(
-            x + Math.sin(angle) * length,
-            y + Math.cos(angle) * length,
-        );
-        c.stroke();
+
 
         // Bullets
         for (let bullet of state.bullets) {
