@@ -12,9 +12,8 @@
         canvas {
             image-rendering: pixelated;
             object-fit: cover;
-            display: block;
             height: 100%; max-height: 100%;
-            width:100%; max-width: 100%;
+            max-width: 100%;
         }
     </style>
 </head>
@@ -379,8 +378,20 @@ Each bullet you fire costs you one point
 
     // State -------------------------------------------------------------------
 
+    function loadLocalData() {
+        const data = window.localStorage.getItem("paratrooper");
+        if (data) {
+            try {return JSON.parse(data);} catch {}
+        }
+        return {};
+    }
+    function saveLocalData(data) {
+        window.localStorage.setItem("paratrooper", JSON.stringify(data));
+    }
+
     const state = {
         running: true,
+        store: loadLocalData(),
         frame: 0,
         input: {
         },
@@ -455,6 +466,15 @@ Each bullet you fire costs you one point
             state.enemies[key].length = 0;
         }
     }
+    function endGame() {
+        if (state.score > state.store.hiscore || state.store.hiscore == undefined) {
+            state.store['hiscore'] = state.score;
+            saveLocalData(state.store);
+        }
+        // TODO: explode gun? animation?
+        reset();
+    }
+
 
     function incrementModel(state) {
         // End level
@@ -467,11 +487,11 @@ Each bullet you fire costs you one point
         const troops_left = state.enemies.trooper.filter((t)=>t.point[0] > state.gun.pos[0]).length;
         const troops_right = state.enemies.trooper.filter((t)=>t.point[0] < state.gun.pos[0]).length;
         if (troops_left>4 || troops_right>4) {
-            reset();
+            endGame();
         }
         for (let bomb of state.enemies.bomb) {
             if (bomb.point[1] > state.gun.pos[1]) {
-                reset();
+                endGame();
             }
         }
 
@@ -582,18 +602,6 @@ Each bullet you fire costs you one point
         c.fillStyle = 'black';
         c.fillRect(0, 0, w, h);
 
-        // Side buffers
-        c.fillStyle = 'magenta';
-        c.fillRect(0, h-60, 60, 60);
-        c.fillRect(w-60, h-60, 60, 60);
-        // Ground
-        c.strokeStyle = 'cyan';
-        c.lineWidth = 2;
-        c.beginPath();
-        c.moveTo(0, state.ground);
-        c.lineTo(w, state.ground);
-        c.stroke();
-
         
         function drawGun(gun) {
             const [x, y, length, angle, width] = [...gun.pos, gun.length, gun.angle, Math.floor(gun.width/2)];
@@ -622,10 +630,23 @@ Each bullet you fire costs you one point
         }
         drawGun(state.gun);
 
+        // Ground
+        c.strokeStyle = 'cyan';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(0, state.ground);
+        c.lineTo(w, state.ground);
+        c.stroke();
+        // Side buffers
+        c.fillStyle = 'magenta';
+        c.fillRect(0, h-60, 60, 60);
+        c.fillRect(w-60, h-60, 60, 60);
+
 
         c.fillStyle = 'white';
         c.fillText(`Level: ${state.level}`, 80, h-6);
         c.fillText(`Score: ${state.score}`, 160, h-6);
+        c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
 
 
 
