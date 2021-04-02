@@ -585,6 +585,7 @@ Each bullet you fire costs you one point
                     state.enemies.trooper.push(pt);
                 }
                 else {
+                    state.score += 5;
                     state.timed_sprites.push(
                         new TimedSprite(pt.point, sprites['trooper_dead'])
                     );
@@ -608,7 +609,7 @@ Each bullet you fire costs you one point
             for (let b of state.bullets) {
                 if (h.isPointInBounds(b.point)) {
                     for (let p of h.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 8;
+                    state.score += 10;
                     return false;
                 }
             }
@@ -618,7 +619,7 @@ Each bullet you fire costs you one point
             for (let b of state.bullets) {
                 if (bo.isPointInBounds(b.point)) {
                     for (let p of bo.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 15;
+                    state.score += 30;
                     return false;
                 }
             }
