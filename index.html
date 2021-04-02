@@ -106,7 +106,17 @@ Each bullet you fire costs you one point
         state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
     }, false);
 
-    function setRunning(running) {state.running = running; console.log("running", running); requestAnimationFrame(main);}
+    // Running
+    function setRunning(running) {
+        state.running = running; 
+        console.log("running", running);
+        if (!running && state.requestAnimationFrameId) {
+            cancelAnimationFrame(state.requestAnimationFrameId);
+            state.requestAnimationFrameId = undefined;
+        } else if (running) {
+            main();
+        }
+    }
     window.addEventListener("focus", () => {setRunning(true)}, false);
     window.addEventListener("blur", () => {setRunning(false)}, false);
 
@@ -722,12 +732,12 @@ Each bullet you fire costs you one point
     }
 
     function main(time) {
-        if (c) {  /// is this needed?
+        if (c && state.running) {
             incrementModel(state);
             render(c, state);
         }
         if (state.running) {
-            requestAnimationFrame(main);
+            state.requestAnimationFrameId = requestAnimationFrame(main);
         }
     }
 
