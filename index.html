@@ -340,40 +340,45 @@ Each bullet you fire costs you one point
     class Paratrooper extends AbstractEnemy {
         constructor(point, velocity) {
             super(point, velocity);
-            this.sprites = {};  // TODO
-            this.bounds = [4, 8]; //TODO? from sprite?
+            this.sprite = sprites['trooper'];
+            this.bounds = [this.sprite.width, this.sprite.height];
             this.parachute_threshold = point[1] + (Math.random() * h/4) + h/8;
+            this._parachute = new ParatrooperParachute(this);
         }
-        get sprite() {
-            return sprites['trooper'];
-        }
-        get parachuteOpen() {
-            return (
+        get parachute() {
+            if (
                 this.parachute_threshold > 0 &&
                 this.point[1] > this.parachute_threshold
-            );
+            ) {return this._parachute;}
         }
         isPointInBounds(point) {
-            if (this.parachuteOpen) {
-                // Do additional collision detection for parachute?
-                const [px, py] = point;
-                const [ix, iy] = [this.point[0]-4, this.point[1]-14];  // hard coded offset - same as render
-                const [iw, ih] = [sprites['parachute'].width, sprites['parachute'].height];
-                const parachuteHit = (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
-                if (parachuteHit) {
-                    this.parachute_threshold = -1;
-                }
+            if (this.parachute?.isPointInBounds(point)) {
+                this.parachute_threshold = -1;
             }
             return super.isPointInBounds(point);
         }
         move() {
-            if (this.parachuteOpen) {
+            if (this.parachute) {
                 this.velocity[1] = Math.max(this.velocity[1]+=-0.1, 0.5);
             } else {
                 this.velocity[1] = Math.max(this.velocity[1]+=0.08, 0.8);
             }
             super.move();
         }
+    }
+
+    class ParatrooperParachute extends AbstractEnemy {
+        constructor(paratrooper) {
+            super([0, 0], [0, 0]);
+            this.paratrooper = paratrooper;
+            this.sprite = sprites['parachute'];
+            this.bounds = [this.sprite.width, this.sprite.height];
+        }
+        get point() {
+            const p = this.paratrooper.point;
+            return [p[0]-4, p[1]-14];
+        }
+        move() {}  // disable movement - this is bound to the paratrooper
     }
 
     class Bomb extends AbstractEnemy {
@@ -539,7 +544,7 @@ Each bullet you fire costs you one point
 
 
         // Fire Gun
-        if (state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
+        if (!state.game_over && state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
             const velocity = state.gun.velocity;
             const angle = state.gun.angle;
             state.score = Math.max(0, state.score-1);
@@ -719,8 +724,9 @@ Each bullet you fire costs you one point
         }
         // draw parachutes separately
         for (let paratrooper of state.enemies.paratrooper){
-            if (paratrooper.parachuteOpen) {
-                c.putImageData(sprites['parachute'], paratrooper.point[0]-4, paratrooper.point[1]-14);
+            const parachute = paratrooper.parachute;
+            if (parachute) {
+                c.putImageData(parachute.sprite, ...parachute.point);
             }
         }
 
