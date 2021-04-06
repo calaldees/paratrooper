@@ -226,12 +226,18 @@ Each bullet you fire costs you one point
             this.point_previous.splice(0,2, ...this.point_current);
             this.point_current.splice(0,2, ...point);  // duplicated in super? how call super? how?
         }
+        get expired() {
+            return this.isOutOfScreenBounds;
+        }
     }
 
     class Particle extends AbstractGameObject {
         constructor(point, velocity, color) {
             super(point, velocity);
             this.color = color;
+        }
+        get expired() {
+            return this.isOutOfScreenBounds;
         }
         move() {
             super.move();
@@ -245,8 +251,8 @@ Each bullet you fire costs you one point
             this.sprite = sprite;
             this.time_to_live = time_to_live;
         }
-        get alive() {
-            return (this.time_to_live>0);
+        get expired() {
+            return (this.time_to_live<=0);
         }
         move() {
             super.move();
@@ -272,7 +278,7 @@ Each bullet you fire costs you one point
             const d = new Dimension(s.width, s.height);
             for (let i=0 ; i<s.data.length ; i+=4) {
                 const c = s.data.slice(i, i+4);
-                if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors do not create particles
+                if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors (or black) do not create particles
                 const [x, y] = d.index_to_position(i);
                 yield new Particle(
                     [
@@ -352,8 +358,9 @@ Each bullet you fire costs you one point
             ) {return this._parachute;}
         }
         isPointInBounds(point) {
+            // TODO: change this - parachutes are game objects - an expired parachute can communicate with the paratrooper object?
             if (this.parachute?.isPointInBounds(point)) {
-                this.parachute_threshold = -1;
+                this._parachute = undefined;
             }
             return super.isPointInBounds(point);
         }
@@ -397,7 +404,7 @@ Each bullet you fire costs you one point
     }
 
 
-    // State -------------------------------------------------------------------
+    // State ----------------------g---------------------------------------------
 
     function loadLocalData() {
         const data = window.localStorage.getItem("paratrooper");
@@ -417,7 +424,7 @@ Each bullet you fire costs you one point
         input: {
         },
         ground: h - 20,
-        gun: {
+        gun: {  // TODO: make this an object (for particles and two player)
             pos: [w/2, h-24-20],
             width: 32,
             velocity: 3,
@@ -584,9 +591,9 @@ Each bullet you fire costs you one point
         }
 
         // Bullets
-        filterInPlace(state.timed_sprites, (s) => s.alive);
-        filterInPlace(state.bullets, (b) => !b.isOutOfScreenBounds);
-        filterInPlace(state.particles, (p) => !p.isOutOfScreenBounds);
+        filterInPlace(state.timed_sprites, (s) => !s.expired);
+        filterInPlace(state.bullets, (b) => !b.expired);
+        filterInPlace(state.particles, (p) => !p.expired);
         filterInPlace(state.enemies.paratrooper, function (pt) {
             for (let b of state.bullets) {
                 if (pt.isPointInBounds(b.point)) {
