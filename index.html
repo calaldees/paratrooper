@@ -50,7 +50,7 @@ Each bullet you fire costs you one point
     function filterInPlace(a, condition, thisArg) {
         let j = 0;
         a.forEach((e, i) => {
-            if (condition.call(thisArg, e, i, a)) {
+            if (!condition.call(thisArg, e, i, a)) {
                 if (i!==j) a[j] = e;
                 j++;
             }
@@ -189,11 +189,14 @@ Each bullet you fire costs you one point
             this.point_current = [...point];
             this.velocity = [...velocity];
         }
+        get expired() {
+            return this._expired;
+        }
         get point() {
             return this.point_current;
         }
         get pointInt() {
-            return this.point_current.map(Math.floor);
+            return this.point.map(Math.floor);
         }
         set point(point) {
             this.point_current.splice(0,2, ...point);
@@ -215,6 +218,7 @@ Each bullet you fire costs you one point
         constructor(point, velocity) {
             super(point, velocity);
             this.point_previous = [...point];
+            this.bounds = [2, 2];
         }
         get points() {
             return [this.point_current, this.point_previous];
@@ -227,7 +231,10 @@ Each bullet you fire costs you one point
             this.point_current.splice(0,2, ...point);  // duplicated in super? how call super? how?
         }
         get expired() {
-            return this.isOutOfScreenBounds;
+            return super.expired || this.isOutOfScreenBounds;
+        }
+        get color() {
+            return 'white';
         }
     }
 
@@ -235,9 +242,10 @@ Each bullet you fire costs you one point
         constructor(point, velocity, color) {
             super(point, velocity);
             this.color = color;
+            this.bounds = [1,1];
         }
         get expired() {
-            return this.isOutOfScreenBounds;
+            return super.expired || this.isOutOfScreenBounds;
         }
         move() {
             super.move();
@@ -252,7 +260,7 @@ Each bullet you fire costs you one point
             this.time_to_live = time_to_live;
         }
         get expired() {
-            return (this.time_to_live<=0);
+            return super.expired || (this.time_to_live<=0);
         }
         move() {
             super.move();
@@ -310,14 +318,13 @@ Each bullet you fire costs you one point
         }
         get expired() {
             // has object left edge of screen?
-            return this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0;
+            return super.expired || (this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0);
         }
         get payload() {
             const x = this.point[0];
             let _p = undefined;
             filterInPlace(this.payloads, function(p){
-                if (Math.abs(x - p.point[0]) < 3) {_p = p; return false;}
-                return true;
+                if (Math.abs(x - p.point[0]) < 3) {_p = p; return true;}
             })
             return _p;
         }
@@ -388,6 +395,15 @@ Each bullet you fire costs you one point
         move() {}  // disable movement - this is bound to the paratrooper
     }
 
+    class Trooper extends AbstractEnemy {
+        constructor(point) {
+            super(point, [0, 0]);  // TODO?
+            this.sprite = sprites['trooper'];
+            this.bounds = [this.sprite.width, this.sprite.height];
+        }
+        move() {}  // disable movement - could be overridden later for walking troopers
+    }
+
     class Bomb extends AbstractEnemy {
         constructor(point, velocity) {
             super(point, velocity);
@@ -404,7 +420,7 @@ Each bullet you fire costs you one point
     }
 
 
-    // State ----------------------g---------------------------------------------
+    // State -------------------------------------------------------------------
 
     function loadLocalData() {
         const data = window.localStorage.getItem("paratrooper");
@@ -434,16 +450,7 @@ Each bullet you fire costs you one point
             angle_max: Math.PI + (Math.PI/2),
             fire: 0,
         },
-        enemies: {
-            jet: [],
-            heli: [],
-            paratrooper: [],
-            trooper: [],
-            bomb: [],
-        },
-        particles: [],
-        bullets: [],
-        timed_sprites: [],
+        game_objects: [],
         level: 0,
         score: 0,
         game_over: false,
@@ -464,11 +471,11 @@ Each bullet you fire costs you one point
         }
         for (let i=0 ; i<num_heli ; i++) {
             const x = random_start_x();
-            state.enemies.heli.push(new Heli([x, 44], [x>w?-1:1, 0], Math.floor(Math.random()*5)+1 ));
+            state.game_objects.push(new Heli([x, 44], [x>w?-1:1, 0], Math.floor(Math.random()*5)+1 ));
         }
         for (let i=0 ; i<num_heli ; i++) {
             const x = random_start_x();
-            state.enemies.jet.push(new Jet([x, 30], [x>w?-1:1, 0]));
+            state.game_objects.push(new Jet([x, 30], [x>w?-1:1, 0]));
         }
 
     }
@@ -499,15 +506,14 @@ Each bullet you fire costs you one point
         }
     }
 
-    //------------
+
+    // Game Model --------------------------------------------------------------
 
     function reset() {
         state.game_over = false;
         state.level = 0;
         state.score = 0;
-        for (let key of Object.keys(state.enemies)) {
-            state.enemies[key].length = 0;
-        }
+        state.game_objects.length = 0;  // Clear all game_objects
     }
     function endGame() {
         if (state.game_over) {return;}
@@ -515,35 +521,40 @@ Each bullet you fire costs you one point
             state.store['hiscore'] = state.score;
             saveLocalData(state.store);
         }
+        // TODO move this to a generic place
         for (let p of particles_from_context_pixels(
             state.gun.pos[0] - Math.floor(state.gun.width/2),
             state.gun.pos[1] - state.gun.length,
             state.gun.width,
             state.ground - state.gun.pos[1],
             [0, -4],
-        )) {state.particles.push(p);}
+        )) {state.game_objects.push(p);}
         state.game_over = true;
     }
 
+    function getGameObjectsOfType(game_object_type) {
+        return state.game_objects.filter((i)=>i.constructor.name == game_object_type);
+    }
 
     function incrementModel(state) {
-        if (state.game_over && state.particles.length == 0) {
+        if (state.game_over && getGameObjectsOfType("Particle").length == 0) {
             reset();
         }
 
         // End level
-        if (state.enemies.jet.length + state.enemies.heli.length <= 0) {
+        if (getGameObjectsOfType("Jet").length + getGameObjectsOfType("Heli").length <= 0) {
             state.level++;
             setupLevelEnemies(state);
         }
 
         // Game over
-        const troops_left = state.enemies.trooper.filter((t)=>t.point[0] > state.gun.pos[0]).length;
-        const troops_right = state.enemies.trooper.filter((t)=>t.point[0] < state.gun.pos[0]).length;
+        const troops = getGameObjectsOfType("Trooper");
+        const troops_left = troops.filter((t)=>t.point[0] > state.gun.pos[0]).length;
+        const troops_right = troops.filter((t)=>t.point[0] < state.gun.pos[0]).length;
         if (troops_left>4 || troops_right>4) {
             endGame();
         }
-        for (let bomb of state.enemies.bomb) {
+        for (let bomb of getGameObjectsOfType("Bomb")) {
             if (bomb.point[1] > state.gun.pos[1]) {
                 endGame();
             }
@@ -555,7 +566,7 @@ Each bullet you fire costs you one point
             const velocity = state.gun.velocity;
             const angle = state.gun.angle;
             state.score = Math.max(0, state.score-1);
-            state.bullets.push(
+            state.game_objects.push(
                 new Bullet(
                     gun_tip_pos(state.gun), // used named params here?
                     [Math.sin(angle) * velocity, Math.cos(angle) * velocity],
@@ -563,95 +574,65 @@ Each bullet you fire costs you one point
             );
         }
 
-        // Move
-        for (let game_object of [
-            ...state.enemies.jet,
-            ...state.enemies.heli,
-            ...state.enemies.paratrooper,
-            ...state.enemies.bomb,
-            ...state.bullets,
-            ...state.particles,
-            ...state.timed_sprites,
-        ]) {game_object.move();}
+        // Temp shortcuts?
+        const bullets = getGameObjectsOfType("Bullet");
+        
+        for (let o of state.game_objects) {
+            o.move();
 
-        // Launch Paratroopers
-        for (let heli of state.enemies.heli) {
-            let paratrooper = heli.payload;
-            if (paratrooper) {
-                state.enemies.paratrooper.push(paratrooper);
+            // Launch Paratroopers
+            // Launch Bombs
+            if (o.constructor.name == "Jet" || o.constructor.name == "Heli") {
+                const payload = o.payload;
+                if (payload) {
+                    state.game_objects.push(payload);
+                }
             }
+
+            if (o.constructor.name == "Paratrooper") {
+                for (let b of bullets) {
+                    if (o.isPointInBounds(b.point)) {
+                        for (let p of o.particles(b.velocity)) {state.game_objects.push(p);}
+                        state.score += 5;
+                        return o._expired = true;
+                    }
+                }
+                if (o.point[1] > state.ground - o.bounds[1]) {
+                    if (o.velocity[1] < 1) {
+                        state.game_objects.push(new Trooper(o.point));
+                    }
+                    else {
+                        state.score += 5;
+                        state.game_objects.push(
+                            new TimedSprite(o.point, sprites['trooper_dead'])
+                        );
+                        // Crush nearby troopers
+                        // TODO: reimplement!!! This will be easyer when we have game_objects sorted by x pos
+                        //filterInPlace(state.enemies.trooper, (t) => Math.abs(t.point[0] - pt.point[0]) > 5);
+                    }
+                    o._expired = true;
+                }
+            }
+
+            if (o.constructor.name == "Jet" || o.constructor.name == "Heli" || o.constructor.name == "Bomb") {
+                for (let b of bullets) {
+                    if (o.isPointInBounds(b.point)) {
+                        b._expired = true;
+                        for (let p of o.particles(b.velocity)) {state.game_objects.push(p);}
+                        state.score += 10;
+                        // TODO: Bombs should give score of +30
+                        o._expired = true;
+                    }
+                }
+            }
+
         }
 
-        // Launch Bombs
-        for (let jet of state.enemies.jet) {
-            let bomb = jet.payload;
-            if (bomb) {
-                state.enemies.bomb.push(bomb);
-            }
-        }
-
-        // Bullets
-        filterInPlace(state.timed_sprites, (s) => !s.expired);
-        filterInPlace(state.bullets, (b) => !b.expired);
-        filterInPlace(state.particles, (p) => !p.expired);
-        filterInPlace(state.enemies.paratrooper, function (pt) {
-            for (let b of state.bullets) {
-                if (pt.isPointInBounds(b.point)) {
-                    for (let p of pt.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 5;
-                    return false;
-                }
-            }
-            if (pt.point[1] > state.ground-pt.bounds[1]) {
-                if (pt.velocity[1] < 1) {
-                    state.enemies.trooper.push(pt);
-                }
-                else {
-                    state.score += 5;
-                    state.timed_sprites.push(
-                        new TimedSprite(pt.point, sprites['trooper_dead'])
-                    );
-                    filterInPlace(state.enemies.trooper, (t) => Math.abs(t.point[0] - pt.point[0]) > 5);
-                }
-                return false;
-            }
-            return true;
-        });
-        filterInPlace(state.enemies.jet, function (j) {
-            for (let b of state.bullets) {
-                if (j.isPointInBounds(b.point)) {
-                    for (let p of j.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 10;
-                    return false;
-                }
-            }
-            return !j.expired;
-        });
-        filterInPlace(state.enemies.heli, function (h) {
-            for (let b of state.bullets) {
-                if (h.isPointInBounds(b.point)) {
-                    for (let p of h.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 10;
-                    return false;
-                }
-            }
-            return !h.expired;
-        });
-        filterInPlace(state.enemies.bomb, function (bo) {
-            for (let b of state.bullets) {
-                if (bo.isPointInBounds(b.point)) {
-                    for (let p of bo.particles(b.velocity)) {state.particles.push(p);}
-                    state.score += 30;
-                    return false;
-                }
-            }
-            return true;
-        });
-
-
+        filterInPlace(state.game_objects, (o)=>o.expired);
         state.frame++;
     }
 
+    // Render ------------------------------------------------------------------
 
     function render(c, state) {
         c.fillStyle = 'black';
@@ -707,33 +688,19 @@ Each bullet you fire costs you one point
         c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
 
 
-
-        // Bullets
-        for (let bullet of state.bullets) {
-            c.fillStyle = 'white';
-            c.fillRect(...bullet.pointInt, 2, 2);
-        }
-        
-        for (let p of state.particles) {
-            c.fillStyle = p.color;
-            c.fillRect(...p.pointInt, 1, 1);
-        }
-
-        for (let game_object of [
-            ...state.enemies.jet,
-            ...state.enemies.heli,
-            ...state.enemies.paratrooper,
-            ...state.enemies.trooper,
-            ...state.timed_sprites,
-            ...state.enemies.bomb,
-        ]) {
-            c.putImageData(game_object.sprite, ...game_object.point);
-        }
-        // draw parachutes separately
-        for (let paratrooper of state.enemies.paratrooper){
-            const parachute = paratrooper.parachute;
-            if (parachute) {
-                c.putImageData(parachute.sprite, ...parachute.point);
+        for (let o of state.game_objects) {
+            const sprite = o.sprite;
+            if (sprite) {
+                c.putImageData(sprite, ...o.pointInt);
+            }
+            else {
+                c.fillStyle = o.color;
+                c.fillRect(...o.pointInt, ...o.bounds);
+            }
+            // HACK - sort term rework to render parachutes
+            const p = o.parachute;
+            if (p) {
+                c.putImageData(p.sprite, ...p.pointInt);
             }
         }
 
