@@ -19,6 +19,7 @@
             position: absolute;
             top: 0;
             right: 0;
+            user-select: none;
         }
     </style>
 </head>
@@ -59,6 +60,22 @@ Each bullet you fire costs you one point
         return a;
     }
 
+    export function all(iterable) {
+        for (let i of iterable) {
+            if (!i) {return false;}
+        }
+        return true;
+    }
+
+    export function* zip(...iterables) {
+        const iterators = [...iterables].map(iterable => iterable[Symbol.iterator]());
+        while (true) {
+            const iterable_items = iterators.map(iterator => iterator.next());
+            if (all(iterable_items.map(i => i.done))) {break;}
+            yield iterable_items.map(i => i.value);
+        }
+    }
+
 
     function isObjectEmpty(obj) {return obj && Object.keys(obj).length === 0 && obj.constructor === Object;}  // https://stackoverflow.com/a/32108184
 
@@ -89,6 +106,10 @@ Each bullet you fire costs you one point
         }
     }
 
+
+    function _random_spread(random_spread=1) {
+        return (Math.random()*random_spread) - (random_spread/2)
+    }
 
     // Setup? ------------------------------------------------------------------
 
@@ -257,6 +278,19 @@ Each bullet you fire costs you one point
         }
     }
 
+    function* particles(imageData, point, velocity=[0,0], func_random_spread=_random_spread) {
+        const d = new Dimension(imageData.width, imageData.height);
+        for (let i=0 ; i<imageData.data.length ; i+=4) {
+            const c = imageData.data.slice(i, i+4);
+            if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors (or black) do not create particles
+            yield new Particle(
+                Array.from(zip(point, d.index_to_position(i).slice(0,2))).map((p)=>p.reduce((acc,item)=>acc+=item)),  //[x + point[0], y + point[1]],
+                velocity.map((v)=>v+func_random_spread()),
+                `rgb(${c[0]},${c[1]},${c[2]})`,
+            );
+        }
+    }
+
     class TimedSprite extends AbstractGameObject {
         constructor(point, sprite, time_to_live=60) {
             super(point, [0, 0]);
@@ -279,35 +313,21 @@ Each bullet you fire costs you one point
             //this.bounds /// abstract
         }
         //get sprite() {}  // abstract
-        // This may not be sufficient for fast moving bullets ... we may need line crossing?
         isPointInBounds(point) {
+            // This may not be sufficient for fast moving bullets ... we may need line crossing?
             const [px, py] = point;
             const [ix, iy] = this.point;
             const [iw, ih] = this.bounds;
             return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
         }
         * particles(velocity=[0,0]) {
-            const s = this.sprite;
-            const d = new Dimension(s.width, s.height);
-            for (let i=0 ; i<s.data.length ; i+=4) {
-                const c = s.data.slice(i, i+4);
-                if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors (or black) do not create particles
-                const [x, y] = d.index_to_position(i);
-                yield new Particle(
-                    [
-                        x + this.point[0],
-                        y + this.point[1],
-                    ],
-                    [
-                        this.velocity[0] + velocity[0]*0.8 + (Math.random() - 0.5),
-                        this.velocity[1] + velocity[1]*0.8 + (Math.random() - 0.5),
-                    ],
-                    `rgb(${c[0]},${c[1]},${c[2]})`,
-                );
-            }
+            yield* particles(this.sprite, this.point, [
+                this.velocity[0] + velocity[0]*0.8,
+                this.velocity[1] + velocity[1]*0.8,
+            ])
         }
-    }
 
+    }
 
     class AbstractEnemyAnimated extends AbstractEnemy {
         constructor(point, velocity, sprite_names) {
@@ -491,8 +511,6 @@ Each bullet you fire costs you one point
     }
 
 
-
-
     //-----------
 
     function gun_tip_pos(gun) {
@@ -501,19 +519,6 @@ Each bullet you fire costs you one point
             x + (Math.sin(angle) * length),
             y + (Math.cos(angle) * length),
         ];
-    }
-
-    function* particles_from_context_pixels(x,y,width,height, velocity=[0,0]) {
-        for (let _x=x ; _x < x+width ; _x++) {
-            for (let _y=y ; _y < y+height ; _y++) {
-                const [r,g,b] = c.getImageData(_x, _y, 1, 1).data;
-                yield new Particle(
-                    [_x, _y,],
-                    [velocity[0] + (Math.random() - 0.5), velocity[1] + (Math.random() - 0.5)],
-                    `rgb(${r},${g},${b})`,
-                );
-            }
-        }
     }
 
 
@@ -531,14 +536,18 @@ Each bullet you fire costs you one point
             state.store['hiscore'] = state.score;
             saveLocalData(state.store);
         }
-        // TODO move this to a generic place
-        for (let p of particles_from_context_pixels(
-            state.gun.pos[0] - Math.floor(state.gun.width/2),
-            state.gun.pos[1] - state.gun.length,
-            state.gun.width,
-            state.ground - state.gun.pos[1],
+
+        // Particles from Gun area
+        const x = state.gun.pos[0] - Math.floor(state.gun.width/2);
+        const y = state.gun.pos[1] - state.gun.length;
+        const width = state.gun.width;
+        const height = state.ground - state.gun.pos[1];
+        for (let p of particles(
+            c.getImageData(x, y, width, height),
+            [x, y],
             [0, -4],
         )) {state.game_objects.push(p);}
+        
         state.game_over = true;
     }
 
