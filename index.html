@@ -136,6 +136,7 @@ Each bullet you fire costs you one point
     const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
     const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
 
+    canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
     document.addEventListener('mouseup', (e) => state.gun.fire = 0, false);
     document.addEventListener('keyup', (e) => state.gun.fire = 0, false);
     document.addEventListener('mousedown', (e) => state.gun.fire = state.frame, false);
