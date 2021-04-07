@@ -626,6 +626,14 @@ Each bullet you fire costs you one point
     function getGameObjectsOfType(game_object_type) {
         return state.game_objects.filter((i)=>i.constructor.name == game_object_type);
     }
+    function hasGameObjectsOfType(game_object_type) {
+        for (let game_object of state.game_objects) {
+            if (game_object.constructor.name == game_object_type) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     function incrementModel(state) {
 
@@ -709,16 +717,6 @@ Each bullet you fire costs you one point
 
         }
 
-        if (state.game_over && game_object_count["Particle"] == 0) {
-            reset();
-        }
-
-        // End level
-        if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
-            state.level++;
-            setupLevelEnemies(state);
-        }
-
         // Game over by troops?
         const troops_left = troops.filter((t)=>t.point[0] > gun.point[0]).length;
         const troops_right = troops.filter((t)=>t.point[0] < gun.point[0]).length;
@@ -728,6 +726,17 @@ Each bullet you fire costs you one point
 
         filterInPlace(state.game_objects, (o)=>o.expired);
         state.frame++;
+
+        // Reset (after all particles have expired)
+        if (state.game_over && !hasGameObjectsOfType("Particle")) {
+            reset();
+        }
+        // End level
+        if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
+            state.level++;
+            setupLevelEnemies(state);
+        }
+
 
     }
 
