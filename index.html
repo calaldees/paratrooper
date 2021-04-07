@@ -134,9 +134,12 @@ Each bullet you fire costs you one point
     const w = canvas.width;
     const h = canvas.height;
     const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
+    const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
 
-    document.addEventListener('mouseup', () => state.gun.fire = 0, false);
-    document.addEventListener('mousedown', () => state.gun.fire = state.frame, false);
+    document.addEventListener('mouseup', (e) => state.gun.fire = 0, false);
+    document.addEventListener('keyup', (e) => state.gun.fire = 0, false);
+    document.addEventListener('mousedown', (e) => state.gun.fire = state.frame, false);
+    document.addEventListener('keydown', (e) => {if (state.gun.fire==0 && keys_fire.indexOf(e.code)>=0) {state.gun.fire = state.frame}}, false);
     document.addEventListener("pointermove", (e) => {
         //console.log(-e.movementX, e.movementY);
         state.gun.angle -= e.movementX/180;
@@ -157,6 +160,11 @@ Each bullet you fire costs you one point
     window.addEventListener("focus", () => {setRunning(true)}, false);
     window.addEventListener("blur", () => {setRunning(false)}, false);
 
+    window.addEventListener('resize', () => {show_github_fork();}, false);
+    function show_github_fork() {
+        document.getElementById("github_fork").style = `display: ${(window.innerWidth / window.innerHeight) <= 1.5 ? "none": "block"}`;
+    }
+    show_github_fork();
 
     function flipX(imageData) {
         const d = new Dimension(imageData.width, imageData.height);
