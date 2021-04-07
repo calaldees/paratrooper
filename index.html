@@ -31,6 +31,9 @@
 <script type="module">
 
     /*
+
+    Original text
+
 Your Mission
 Do not allow enemy paratroopers to land on either side of your gun base.
 If four paratroopers land on one side of your base, they will overpower your defence and blow up your gun.
@@ -126,35 +129,40 @@ Each bullet you fire costs you one point
     }
 
 
-    // Setup? ------------------------------------------------------------------
-
+    // Constants ---------------------------------------------------------------
 
     const canvas = document.getElementById('canvas');
     const c = canvas.getContext('2d');
     const w = canvas.width;
     const h = canvas.height;
     const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
+
+    // Events ------------------------------------------------------------------
+
     const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
 
     canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
-    document.addEventListener('mouseup', (e) => state.gun.fire = 0, false);
-    document.addEventListener('keyup', (e) => state.gun.fire = 0, false);
-    document.addEventListener('mousedown', (e) => state.gun.fire = state.frame, false);
-    document.addEventListener('keydown', (e) => {if (state.gun.fire==0 && keys_fire.indexOf(e.code)>=0) {state.gun.fire = state.frame}}, false);
+    function fire_gun(fire) {
+        const g = state.guns[0];
+        if (fire && g.fire == 0) {g.fire = state.frame;}
+        else                     {g.fire = 0;}
+    }
+    document.addEventListener('mouseup', (e) => {fire_gun(false)}, false);
+    document.addEventListener('keyup', (e) => {fire_gun(false)}, false);
+    document.addEventListener('mousedown', (e) => {fire_gun(true)}, false);
+    document.addEventListener('keydown', (e) => {fire_gun(keys_fire.indexOf(e.code)>=0)}, false);
     document.addEventListener("pointermove", (e) => {
-        //console.log(-e.movementX, e.movementY);
-        state.gun.angle -= e.movementX/180;
-        state.gun.angle = Math.max(Math.min(state.gun.angle, state.gun.angle_max), state.gun.angle_min);
+        state.guns[0].angle -= e.movementX/180;
     }, false);
 
     // Running
     function setRunning(running) {
-        state.running = running; 
+        state.running = running;
         console.log("running", running);
         if (!running && state.requestAnimationFrameId) {
             cancelAnimationFrame(state.requestAnimationFrameId);
             state.requestAnimationFrameId = undefined;
-        } else if (running) {
+        } else if (running && !state.requestAnimationFrameId) {
             main();
         }
     }
@@ -166,6 +174,9 @@ Each bullet you fire costs you one point
         document.getElementById("github_fork").style = `display: ${(window.innerWidth / window.innerHeight) <= 1.5 ? "none": "block"}`;
     }
     show_github_fork();
+
+
+    // Load images -------------------------------------------------------------
 
     function flipX(imageData) {
         const d = new Dimension(imageData.width, imageData.height);
@@ -228,7 +239,7 @@ Each bullet you fire costs you one point
     */
 
 
-    // Objects -----------------------------------------------------------------
+    // Game Objects ------------------------------------------------------------
 
     class AbstractGameObject {
         constructor(point, velocity) {
@@ -253,7 +264,7 @@ Each bullet you fire costs you one point
         }
         get isOutOfScreenBounds() {
             const [x, y] = this.point;
-            return (x < 0 || x > w || y < -20 || y > w);
+            return (x+this.bounds[0] < 0 || x > w || y < -20 || y+this.bounds[1] > h);
         }
         move() {
             this.point = [
@@ -469,12 +480,9 @@ Each bullet you fire costs you one point
     class Bomb extends AbstractEnemy {
         constructor(point, velocity) {
             super(point, velocity);
-            this._sprite = sprites['bomb'];
-            this.bounds = [4, 4];  // TODO: from sprite?
+            this.sprite = sprites['bomb'];
+            this.bounds = [this.sprite.width, this.sprite.height];
             this.score = 30;
-        }
-        get sprite() {
-            return this._sprite;
         }
         move() {
             this.velocity[1] = Math.min(this.velocity[1]+=0.03, 1.5);
@@ -482,8 +490,57 @@ Each bullet you fire costs you one point
         }
     }
 
+    class Gun extends AbstractGameObject {
+        constructor(point, color='cyan') {
+            super(point, [0, 0]);
+            this.bounds = [32, 24];
+            this.length = 12;
+            this.gun_velocity = 3;
+            this.color = color;
+            this._angle = Math.PI;
+            this.angle_min = Math.PI - (Math.PI/2);
+            this.angle_max = Math.PI + (Math.PI/2);
+            this.fire = 0;  // the frame firing started
+        }
+        get angle() {
+            return this._angle;
+        }
+        set angle(angle) {
+            this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);
+        }
+        get gun_tip_point() {
+            return [
+                this.point[0] + (Math.sin(this.angle) * this.length),
+                this.point[1] + (Math.cos(this.angle) * this.length),
+            ];
+        }
+        get payload() {
+            if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0) {  // FUCKKKKKKKKKK!!!! i NEED THE FRAME
+                return new Bullet(
+                    this.gun_tip_point,
+                    [Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
+                )
+            }
+        }
+        * particles() {
+            const x = this.point[0] - Math.floor(this.bounds[0]/2);
+            const y = this.point[1] - this.length;
+            //const height = state.ground - this.point[1];  //?? double check this?  // is this not just this.height+this.length??
+            const w = this.bounds[0];
+            const h = this.bounds[1] + this.length;
+            yield* particles(c.getImageData(x, y, w, h), [x, y], [0, -4]);
+        }
+        isPointInBounds(point) {  // override - the pos and width are centred in this object
+            const w = Math.floor(this.bounds[0]/2);
+            const [px, py] = point;
+            const [ix, iy] = [this.point[0]-w, this.point[1]];
+            const [iw, ih] = this.bounds;
+            return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+        }
+    }
 
-    // State -------------------------------------------------------------------
+
+    // Storage -----------------------------------------------------------------
 
     function loadLocalData() {
         const data = window.localStorage.getItem("paratrooper");
@@ -496,29 +553,8 @@ Each bullet you fire costs you one point
         window.localStorage.setItem("paratrooper", JSON.stringify(data));
     }
 
-    const state = {
-        running: true,
-        store: loadLocalData(),
-        frame: 0,
-        input: {
-        },
-        ground: h - 20,
-        gun: {  // TODO: make this an object (for particles and two player)
-            pos: [w/2, h-24-20],
-            width: 32,
-            velocity: 3,
-            length: 12,
-            angle: Math.PI,
-            angle_min: Math.PI - (Math.PI/2),
-            angle_max: Math.PI + (Math.PI/2),
-            fire: 0,
-        },
-        game_objects: [],
-        level: 0,
-        score: 0,
-        game_over: false,
-    };
 
+    // Level -------------------------------------------------------------------
 
     function setupLevelEnemies(state) {
         const level = state.level;
@@ -544,44 +580,47 @@ Each bullet you fire costs you one point
     }
 
 
-    //-----------
-
-    function gun_tip_pos(gun) {
-        const [x, y, length, angle] = [...gun.pos, gun.length, gun.angle];
-        return [
-            x + (Math.sin(angle) * length),
-            y + (Math.cos(angle) * length),
-        ];
-    }
-
 
     // Game Model --------------------------------------------------------------
+
+    const state = {
+        running: true,
+        store: loadLocalData(),
+        input: {},
+        ground: h - 20,
+        guns: [],
+        game_objects: [],
+        //frame: 0,
+        //level: 0,
+        //score: 0,
+        //game_over: false,
+    };
+    reset();
 
     function reset() {
         state.game_over = false;
         state.level = 0;
         state.score = 0;
         state.game_objects.length = 0;  // Clear all game_objects
+        state.frame = 0;
+
+        const gun = new Gun([w/2, h-24-20]);
+        state.guns = [gun];
+        state.game_objects.push(gun);
     }
+
+
     function endGame() {
         if (state.game_over) {return;}
+        state.game_over = true;
         if (state.score > state.store.hiscore || state.store.hiscore == undefined) {
             state.store['hiscore'] = state.score;
             saveLocalData(state.store);
         }
-
-        // Particles from Gun area
-        const x = state.gun.pos[0] - Math.floor(state.gun.width/2);
-        const y = state.gun.pos[1] - state.gun.length;
-        const width = state.gun.width;
-        const height = state.ground - state.gun.pos[1];
-        for (let p of particles(
-            c.getImageData(x, y, width, height),
-            [x, y],
-            [0, -4],
-        )) {state.game_objects.push(p);}
-        
-        state.game_over = true;
+        for (let gun of state.guns) {
+            gun._expired = true;
+            for (let p of gun.particles()) {state.game_objects.push(p);}
+        }
     }
 
     function getGameObjectsOfType(game_object_type) {
@@ -589,50 +628,21 @@ Each bullet you fire costs you one point
     }
 
     function incrementModel(state) {
-        if (state.game_over && getGameObjectsOfType("Particle").length == 0) {
-            reset();
-        }
-
-        // End level
-        if (getGameObjectsOfType("Jet").length + getGameObjectsOfType("Heli").length <= 0) {
-            state.level++;
-            setupLevelEnemies(state);
-        }
-
-        // Game over
-        const troops = getGameObjectsOfType("Trooper");
-        const troops_left = troops.filter((t)=>t.point[0] > state.gun.pos[0]).length;
-        const troops_right = troops.filter((t)=>t.point[0] < state.gun.pos[0]).length;
-        if (troops_left>=4 || troops_right>=4) {
-            endGame();
-        }
-        for (let bomb of getGameObjectsOfType("Bomb")) {
-            if (bomb.point[1] > state.gun.pos[1]) {
-                endGame();
-            }
-        }
-
-
-        // Fire Gun
-        if (!state.game_over && state.gun.fire && (state.frame - state.gun.fire) % 8 == 0) {
-            const velocity = state.gun.velocity;
-            const angle = state.gun.angle;
-            state.score = Math.max(0, state.score-1);
-            state.game_objects.push(
-                new Bullet(
-                    gun_tip_pos(state.gun), // used named params here?
-                    [Math.sin(angle) * velocity, Math.cos(angle) * velocity],
-                )
-            );
-        }
 
         // Temp shortcuts?
         const bullets = getGameObjectsOfType("Bullet");
+        const troops = getGameObjectsOfType("Trooper");
+        const gun = state.guns[0];
         
         //state.game_objects.sort((a,b)=>b.point[0]-a.point[0]);
         //const active_game_objects = [];
 
+        // Game Objects -----
+        const game_object_count = [
+            'Bullet', 'Particle', 'Bomb', 'Jet', 'Heli', 'Paratrooper', 'Trooper', 'ParatrooperParachute', 'Gun',
+        ].reduce((o, key) => {o[key]=0; return o;}, {});
         for (let o of state.game_objects) {
+            game_object_count[o.constructor.name]++;
             //filterInPlace(active_game_objects, (a) => a.x_edge < o.point[0]);
             //active_game_objects.push(o);
             //console.log(active_game_objects.length);
@@ -643,10 +653,13 @@ Each bullet you fire costs you one point
             // Launch Paratroopers
             // Launch Bombs
             // Open parachutes
-            if (o.constructor.name == "Jet" || o.constructor.name == "Heli" || o.constructor.name == "Paratrooper") {
+            if (["Jet", "Heli", "Paratrooper", "Gun"].indexOf(o.constructor.name) >= 0) {
                 const payload = o.payload;
                 if (payload) {
                     state.game_objects.push(payload);
+                    if (payload.constructor.name == "Bullet") {
+                        state.score = Math.max(0, state.score-1);
+                    }
                 }
             }
 
@@ -685,12 +698,37 @@ Each bullet you fire costs you one point
                     }
                 }
             }
-            
 
+            // Bombs hitting guns
+            if (o.constructor.name == "Bomb") {
+                if (gun.isPointInBounds(o.point)) {
+                    o._expired = true;
+                    endGame();
+                }
+            }
+
+        }
+
+        if (state.game_over && game_object_count["Particle"] == 0) {
+            reset();
+        }
+
+        // End level
+        if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
+            state.level++;
+            setupLevelEnemies(state);
+        }
+
+        // Game over by troops?
+        const troops_left = troops.filter((t)=>t.point[0] > gun.point[0]).length;
+        const troops_right = troops.filter((t)=>t.point[0] < gun.point[0]).length;
+        if (troops_left>=4 || troops_right>=4) {
+            endGame();
         }
 
         filterInPlace(state.game_objects, (o)=>o.expired);
         state.frame++;
+
     }
 
     // Render ------------------------------------------------------------------
@@ -701,32 +739,28 @@ Each bullet you fire costs you one point
 
         
         function drawGun(gun) {
-            const [x, y, length, angle, width] = [...gun.pos, gun.length, gun.angle, Math.floor(gun.width/2)];
+            const [x, y, width] = [...gun.point, Math.floor(gun.bounds[0]/2)];
             c.lineCap = "round";
             // Gun Barrel
             c.beginPath();
             c.strokeStyle = 'cyan';
             c.lineWidth = 4;
-            c.moveTo(x, y);
-            c.lineTo(
-                x + Math.sin(angle) * length,
-                y + Math.cos(angle) * length,
-            );
+            c.moveTo(...gun.point);
+            c.lineTo(...gun.gun_tip_point);
             c.stroke();
             // Gun Turret
             c.beginPath();
             c.strokeStyle = 'magenta';
             c.lineWidth = 8;
-            c.moveTo(x, y);
+            c.moveTo(...gun.point);
             c.lineTo(x, y+16);
             c.stroke();
             // Gun Base
             c.fillStyle = 'white';
-            c.fillRect(x-width, y, width*2, state.ground-y);
-
+            c.fillRect(x-width, y, width*2, gun.bounds[1]);
         }
         if (!state.game_over) {
-            drawGun(state.gun);
+            drawGun(state.guns[0]);
         }
         
 
@@ -754,6 +788,7 @@ Each bullet you fire costs you one point
             if (sprite) {
                 c.putImageData(sprite, ...o.pointInt);
             }
+            else if (o.constructor.name == "Gun") {}  // Skip guns
             else {
                 c.fillStyle = o.color;
                 c.fillRect(...o.pointInt, ...o.bounds);
