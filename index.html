@@ -653,10 +653,12 @@ Each bullet you fire costs you one point
                         state.game_objects.push(
                             new TimedSprite(o.point, sprites['trooper_dead'])
                         );
+                        for (let p of o.particles([0, -o.velocity[1]*3])) {state.game_objects.push(p);}
 
                         // Crush nearby troopers
-                        // TODO: reimplement!!! This will be easyer when we have game_objects sorted by x pos
-                        //filterInPlace(state.enemies.trooper, (t) => Math.abs(t.point[0] - pt.point[0]) > 5);
+                        for (let t of troops) {
+                            if (Math.abs(o.point[0] - t.point[0]) <= 6) {t._expired = true;}
+                        }
                     }
                 }
             }
