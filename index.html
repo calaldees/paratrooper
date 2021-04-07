@@ -407,19 +407,21 @@ Each bullet you fire costs you one point
             this.parachute_threshold = point[1] + (Math.random() * h/4) + h/8;
             this._parachute = new ParatrooperParachute(this);
             this.score = 5;
+            this.parachute_open = false;
+        }
+        get payload() {
+            if (this.parachute_open == false && this.parachute) {
+                this.parachute_open = true;
+                return this._parachute;
+            }
         }
         get parachute() {
             if (
                 this.parachute_threshold > 0 &&
-                this.point[1] > this.parachute_threshold
+                this.point[1] > this.parachute_threshold &&
+                this._parachute &&
+                !this._parachute._expired
             ) {return this._parachute;}
-        }
-        isPointInBounds(point) {
-            // TODO: change this - parachutes are game objects - an expired parachute can communicate with the paratrooper object?
-            if (this.parachute?.isPointInBounds(point)) {
-                this._parachute = undefined;
-            }
-            return super.isPointInBounds(point);
         }
         move() {
             if (this.parachute) {
@@ -437,7 +439,7 @@ Each bullet you fire costs you one point
             this.paratrooper = paratrooper;
             this.sprite = sprites['parachute'];
             this.bounds = [this.sprite.width, this.sprite.height];
-            this.score = 5;
+            this.score = 0;  // score is from troops hitting the ground
         }
         get point() {
             const p = this.paratrooper.point;
@@ -631,7 +633,8 @@ Each bullet you fire costs you one point
 
             // Launch Paratroopers
             // Launch Bombs
-            if (o.constructor.name == "Jet" || o.constructor.name == "Heli") {
+            // Open parachutes
+            if (o.constructor.name == "Jet" || o.constructor.name == "Heli" || o.constructor.name == "Paratrooper") {
                 const payload = o.payload;
                 if (payload) {
                     state.game_objects.push(payload);
@@ -641,6 +644,7 @@ Each bullet you fire costs you one point
             if (o.constructor.name == "Paratrooper") {
                 if (o.point[1] > state.ground - o.bounds[1]) {
                     o._expired = true;
+                    if (o._parachute) {o._parachute._expired = true;}
                     if (o.velocity[1] < 1) {
                         state.game_objects.push(new Trooper(o.point));
                     }
@@ -657,13 +661,14 @@ Each bullet you fire costs you one point
                 }
             }
 
-            
             //const bullets = active_game_objects.filter((o)=>o.constructor.name=="Bullet");
-            if (["Jet", "Heli", "Bomb", "Paratrooper"].indexOf(o.constructor.name) >= 0) {
+            if (["Jet", "Heli", "Bomb", "Paratrooper", "ParatrooperParachute"].indexOf(o.constructor.name) >= 0) {
                 for (let b of bullets) {
                     if (o.isPointInBounds(b.point)) {
                         b._expired = true;
                         o._expired = true;
+                        // HACK - Special case for expiring child objects of parachutes
+                        if (o._parachute) {o._parachute._expired = true;}
                         for (let p of o.particles(b.velocity)) {state.game_objects.push(p);}
                         state.score += o.score || 0;
                     }
@@ -741,11 +746,6 @@ Each bullet you fire costs you one point
             else {
                 c.fillStyle = o.color;
                 c.fillRect(...o.pointInt, ...o.bounds);
-            }
-            // HACK - sort term rework to render parachutes
-            const p = o.parachute;
-            if (p) {
-                c.putImageData(p.sprite, ...p.pointInt);
             }
         }
 
