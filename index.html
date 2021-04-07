@@ -571,11 +571,11 @@ Each bullet you fire costs you one point
         }
         for (let i=0 ; i<num_heli ; i++) {
             const x = random_start_x();
-            state.game_objects.push(new Heli([x, 44], [x>w?-1:1, 0], Math.floor(Math.random()*random_num_troops_max) ));
+            state.game_objects.push(new Heli([x, 30+_random_spread(30)], [x>w?-1:1, 0], Math.floor(Math.random()*random_num_troops_max) ));
         }
         for (let i=0 ; i<num_heli ; i++) {
             const x = random_start_x();
-            state.game_objects.push(new Jet([x, 30], [x>w?-1:1, 0]));
+            state.game_objects.push(new Jet([x, 30+_random_spread(30)], [x>w?-1:1, 0]));
         }
 
     }
