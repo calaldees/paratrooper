@@ -659,7 +659,7 @@ Each bullet you fire costs you one point
                     else {
                         state.score += o.score;
                         state.game_objects.push(
-                            new TimedSprite(o.point, sprites['trooper_dead'])
+                            new TimedSprite([o.point[0]-4, state.ground-sprites['trooper_dead'].height-1], sprites['trooper_dead'])
                         );
                         for (let p of o.particles([0, -o.velocity[1]*2])) {state.game_objects.push(p);}
 
