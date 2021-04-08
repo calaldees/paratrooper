@@ -50,6 +50,13 @@ Each bullet you fire costs you one point
 
 	// External functions copy&paste -------------------------------------------
 
+	const deg360 = Math.PI*2;
+	const deg180 = Math.PI;
+	const deg90 = Math.PI/2;
+	const deg45 = Math.PI/4;
+	function normaliseAngle(a) {return mod(a, deg360);}
+
+
 	// https://stackoverflow.com/a/37319954/3356840
 	function filterInPlace(a, condition, thisArg) {
 		let j = 0;
@@ -515,26 +522,27 @@ Each bullet you fire costs you one point
 			this.gun_velocity = 3;
 			this.color = color;
 			this._angle = Math.PI;
-			this.angle_min = Math.PI - (Math.PI/2);
-			this.angle_max = Math.PI + (Math.PI/2);
+			//this.angle_min = Math.PI - (Math.PI/2);
+			//this.angle_max = Math.PI + (Math.PI/2);
 			this.fire = 0;  // the frame firing started
 		}
 		get angle() {
 			return this._angle;
 		}
 		set angle(angle) {
-			this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);
+			this._angle = normaliseAngle(angle); //Math.max(Math.min(angle, this.angle_max), this.angle_min);
 		}
-		get gun_tip_point() {
+		gun_tip_point(angle=0) {
 			return [
-				this.point[0] + (Math.sin(this.angle) * this.length),
-				this.point[1] + (Math.cos(this.angle) * this.length),
+				this.point[0] + (Math.sin(this.angle+angle) * this.length),
+				this.point[1] + (Math.cos(this.angle+angle) * this.length),
 			];
 		}
 		get payload() {
-			if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0) {
+			if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0 &&
+				this.angle>Math.PI/2 && this.angle<Math.PI*1.5) {
 				return new Bullet(
-					this.gun_tip_point,
+					this.gun_tip_point(),
 					[Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
 				)
 			}
@@ -553,6 +561,26 @@ Each bullet you fire costs you one point
 			const [ix, iy] = [this.point[0]-w, this.point[1]];
 			const [iw, ih] = this.bounds;
 			return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+		}
+		get shieldAngles() {
+			return [
+				normaliseAngle(-this.angle-(deg45)-deg90),
+				normaliseAngle(-this.angle+(deg45)-deg90),
+			];
+		}
+		isInShield(point) {
+			const dx = this.point[0] - point[0];
+			const dy = this.point[1] - point[1];
+			const h = Math.pow(dx,2) + Math.pow(dy,2);
+			if (h>Math.pow(this.bounds[0]/2,2)) {return false;} // too far away (by euclidean distance)
+			const pp = normaliseAngle(Math.atan2(dy,dx));
+			const [a, b] = this.shieldAngles.map((i)=>normaliseAngle(i+deg180));
+			if (a-b<Math.PI) {
+				return (pp>a && pp<b);
+			}
+			else {
+				return (pp<a || pp>b);
+			}
 		}
 	}
 
@@ -602,6 +630,11 @@ Each bullet you fire costs you one point
 				new Jet([x, 30+_random_spread(30)], [x>w?-v:v, 0])
 			);
 		}
+
+		// Test bomb
+		//state.game_objects.push(
+		//	new Bomb([(w/2)-67,(h/2)+20], [1,1])
+		//);
 
 	}
 
@@ -747,13 +780,18 @@ Each bullet you fire costs you one point
 
 			// Bombs hitting guns
 			if (o.constructor.name == "Bomb") {
+				const bomb_center_point = o.point.map((i)=>Math.floor(i+(o.bounds[0]/2)));  // .point is the top left, correct this for collisions
 				for (let gun of state.guns) {
-					if (gun.isPointInBounds(o.point)) {
+					if (gun.isPointInBounds(bomb_center_point)) {
 						o._expired = true;
 						endGame();
 					}
+					if (gun.isInShield(bomb_center_point)) {
+						o._expired = true;
+						for (let p of o.particles()) {state.game_objects.push(p);}
+					}
 				}
-				if (o.point[1] > state.ground) {
+				if (bomb_center_point[1] > state.ground) {
 					o._expired = true;
 					for (let p of o.particles([o.velocity[0],-o.velocity[1]*3])) {state.game_objects.push(p);}
 				}
@@ -800,8 +838,14 @@ Each bullet you fire costs you one point
 			c.strokeStyle = 'cyan';
 			c.lineWidth = 4;
 			c.moveTo(...gun.point);
-			c.lineTo(...gun.gun_tip_point);
+			c.lineTo(...gun.gun_tip_point());
 			c.stroke();
+			// Shield (the when turret underneath)
+			c.fillStyle = 'magenta';
+			c.beginPath();
+			c.arc(...gun.point, width, ...gun.shieldAngles);
+			c.lineTo(...gun.point);
+			c.fill();
 			// Gun Turret
 			c.beginPath();
 			c.strokeStyle = 'magenta';
