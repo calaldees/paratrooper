@@ -510,7 +510,7 @@ Each bullet you fire costs you one point
 	class Gun extends AbstractGameObject {
 		constructor(point, color='cyan') {
 			super(point, [0, 0]);
-			this.bounds = [32, 24];
+			this.bounds = [32, 20];
 			this.length = 12;
 			this.gun_velocity = 3;
 			this.color = color;
@@ -638,7 +638,7 @@ Each bullet you fire costs you one point
 
 		// Create Guns
 		const _w = Math.floor(w/2);
-		const _h = h-24-20;
+		const _h = h-20-20 ;
 		if (state.players==1) {
 			state.guns = [new Gun([_w, _h])];
 		}
