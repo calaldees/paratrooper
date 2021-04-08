@@ -398,8 +398,8 @@ Each bullet you fire costs you one point
 			this.score = 10;
 			if (Math.random()>0.5) {
 				const v = this.velocity[0];
-				const r = Math.floor(_random_spread(30));
-				const bx = 80;
+				const r = Math.floor(_random_spread(40));
+				const bx = 90;
 				this.payloads.push(new Bomb([(v>0?bx:w-bx)+r, this.point[1]+6], this.velocity));
 			}
 		}
