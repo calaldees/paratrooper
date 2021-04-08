@@ -139,20 +139,35 @@ Each bullet you fire costs you one point
 
 	// Events ------------------------------------------------------------------
 
-	const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
-
 	canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
-	function fire_gun(fire) {
-		const g = state.guns[0];
-		if (fire && g.fire == 0) {g.fire = state.frame;}
-		else                     {g.fire = 0;}
+	function keycode_to_player_index(code) {
+		if (typeof(code) != "string") {return -1;}
+		for (let player_index=0 ; player_index<state.input.keys.length ; player_index++) {
+			if (state.input.keys[player_index].indexOf(code) >= 0) {return player_index;}
+		}
+		return -1;
 	}
-	document.addEventListener('mouseup', (e) => {fire_gun(false)}, false);
-	document.addEventListener('keyup', (e) => {fire_gun(false)}, false);
-	document.addEventListener('mousedown', (e) => {fire_gun(true)}, false);
-	document.addEventListener('keydown', (e) => {fire_gun(keys_fire.indexOf(e.code)>=0)}, false);
+	function handel_keypress(event, active) {  // Apply keypress to correct player Gun object
+		let player_index = keycode_to_player_index(event.code);
+		if (event.type.indexOf('mouse')>=0) {player_index=0;}  // all mouse events are player 0 - for now
+		const g = state.guns[player_index];
+		if (!g) {return;}
+		if (event.type.indexOf('up')>=0) {g.fire=0;}
+		if (event.type.indexOf('down')>=0 && g.fire==0) {g.fire=state.frame;}
+	}
+	document.addEventListener('mouseup', handel_keypress, false);
+	document.addEventListener('keyup', handel_keypress, false);
+	document.addEventListener('mousedown', handel_keypress, false);
+	document.addEventListener('keydown', handel_keypress, false);
 	document.addEventListener("pointermove", (e) => {
 		state.guns[0].angle -= e.movementX/180;
+		if (state.guns[1]) {
+			state.guns[1].angle -= e.movementY/180;
+		}
+	}, false);
+	document.addEventListener('keypress', (e)=>{
+		if (e.code == "Digit1") {state.players = 1; reset();}
+		if (e.code == "Digit2") {state.players = 2; reset();}
 	}, false);
 
 	// Running
@@ -398,8 +413,8 @@ Each bullet you fire costs you one point
 			this.score = 10;
 			if (Math.random()>0.5) {
 				const v = this.velocity[0];
-				const r = Math.floor(_random_spread(40));
-				const bx = 90;
+				const r = Math.floor(_random_spread(50));
+				const bx = 85;
 				this.payloads.push(new Bomb([(v>0?bx:w-bx)+r, this.point[1]+6], this.velocity));
 			}
 		}
@@ -597,7 +612,13 @@ Each bullet you fire costs you one point
 	const state = {
 		running: true,
 		store: loadLocalData(),
-		input: {},
+		players: 1,
+		input: {
+			keys: [
+				["Space", "ControlLeft", "ShiftLeft", "KeyZ", "KeyX"],
+				["KeyA", "KeyS", "KeyQ", "KeyW", "KeyE"],
+			],
+		},
 		ground: h - 20,
 		guns: [],
 		game_objects: [],
@@ -615,9 +636,16 @@ Each bullet you fire costs you one point
 		state.game_objects.length = 0;  // Clear all game_objects
 		state.frame = 0;
 
-		const gun = new Gun([w/2, h-24-20]);
-		state.guns = [gun];
-		state.game_objects.push(gun);
+		// Create Guns
+		const _w = Math.floor(w/2);
+		const _h = h-24-20;
+		if (state.players==1) {
+			state.guns = [new Gun([_w, _h])];
+		}
+		if (state.players==2) {
+			state.guns = [new Gun([_w-12, _h]), new Gun([_w+12, _h])];
+		}
+		state.game_objects.push(...state.guns);
 	}
 
 
@@ -651,7 +679,6 @@ Each bullet you fire costs you one point
 		// Temp shortcuts?
 		const bullets = getGameObjectsOfType("Bullet");
 		const troops = getGameObjectsOfType("Trooper");
-		const gun = state.guns[0];
 		
 		//state.game_objects.sort((a,b)=>b.point[0]-a.point[0]);
 		//const active_game_objects = [];
@@ -720,9 +747,11 @@ Each bullet you fire costs you one point
 
 			// Bombs hitting guns
 			if (o.constructor.name == "Bomb") {
-				if (gun.isPointInBounds(o.point)) {
-					o._expired = true;
-					endGame();
+				for (let gun of state.guns) {
+					if (gun.isPointInBounds(o.point)) {
+						o._expired = true;
+						endGame();
+					}
 				}
 				if (o.point[1] > state.ground) {
 					o._expired = true;
@@ -733,8 +762,9 @@ Each bullet you fire costs you one point
 		}
 
 		// Game over by troops?
-		const troops_left = troops.filter((t)=>t.point[0] > gun.point[0]).length;
-		const troops_right = troops.filter((t)=>t.point[0] < gun.point[0]).length;
+		const _w = Math.floor(w/2);
+		const troops_left = troops.filter((t)=>t.point[0] > _w).length;
+		const troops_right = troops.filter((t)=>t.point[0] < _w).length;
 		if (troops_left>=4 || troops_right>=4) {
 			endGame();
 		}
@@ -784,7 +814,7 @@ Each bullet you fire costs you one point
 			c.fillRect(x-width, y, width*2, gun.bounds[1]);
 		}
 		if (!state.game_over) {
-			drawGun(state.guns[0]);
+			for (let gun of state.guns) {drawGun(gun);}
 		}
 		
 
