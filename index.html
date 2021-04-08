@@ -865,26 +865,6 @@ Each bullet you fire costs you one point
 		if (!state.game_over) {
 			for (let gun of state.guns) {drawGun(gun);}
 		}
-		
-
-		// Ground
-		c.strokeStyle = 'cyan';
-		c.lineWidth = 2;
-		c.beginPath();
-		c.moveTo(0, state.ground);
-		c.lineTo(w, state.ground);
-		c.stroke();
-		// Side buffers
-		c.fillStyle = 'magenta';
-		c.fillRect(0, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
-		c.fillRect(w-w_crop_for_4_by_3, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
-
-
-		c.fillStyle = 'white';
-		c.fillText(`Level: ${state.level}`, 80, h-6);
-		c.fillText(`Score: ${state.score}`, 160, h-6);
-		c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
-
 
 		for (let o of state.game_objects) {
 			const sprite = o.sprite;
@@ -898,6 +878,22 @@ Each bullet you fire costs you one point
 			}
 		}
 
+		// Ground
+		c.strokeStyle = 'cyan';
+		c.lineWidth = 2;
+		c.beginPath();
+		c.moveTo(0, state.ground);
+		c.lineTo(w, state.ground);
+		c.stroke();
+		// Side buffers
+		c.fillStyle = 'magenta';
+		c.fillRect(0, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
+		c.fillRect(w-w_crop_for_4_by_3, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
+		// Text
+		c.fillStyle = 'white';
+		c.fillText(`Level: ${state.level}`, 80, h-6);
+		c.fillText(`Score: ${state.score}`, 160, h-6);
+		c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
 	}
 
 
