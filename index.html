@@ -1,38 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <link id="favicon" rel="shortcut icon" type="image/png" href="data:image/png;base64,....==" />
-    <style>
-        html, body {
-            margin: 0;
-            height: 100%;
-            overflow: hidden;
-        }
-        canvas {
-            image-rendering: pixelated;
-            object-fit: cover;
-            height: 100%; max-height: 100%;
-            max-width: 100%;
-        }
-        #github_fork {
-            position: absolute;
-            top: 0;
-            right: 0;
-            user-select: none;
-        }
-    </style>
+	<meta charset="utf-8" />
+	<link id="favicon" rel="shortcut icon" type="image/png" href="data:image/png;base64,....==" />
+	<style>
+		html, body {
+			margin: 0;
+			height: 100%;
+			overflow: hidden;
+		}
+		canvas {
+			image-rendering: pixelated;
+			object-fit: cover;
+			height: 100%; max-height: 100%;
+			max-width: 100%;
+		}
+		#github_fork {
+			position: absolute;
+			top: 0;
+			right: 0;
+			user-select: none;
+		}
+	</style>
 </head>
 <body>
-    <!-- Chrome Canvas Fullscreen - F11 to toggle fullscreen -->
-    <canvas id="canvas" width="480" height="270"></canvas>
-    <a id="github_fork" href="https://github.com/calaldees/paratrooper"><img loading="lazy" width="149" height="149" src="https://github.blog/wp-content/uploads/2008/12/forkme_right_white_ffffff.png?resize=149%2C149" class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1"></a>
+	<!-- Chrome Canvas Fullscreen - F11 to toggle fullscreen -->
+	<canvas id="canvas" width="480" height="270"></canvas>
+	<a id="github_fork" href="https://github.com/calaldees/paratrooper"><img loading="lazy" width="149" height="149" src="https://github.blog/wp-content/uploads/2008/12/forkme_right_white_ffffff.png?resize=149%2C149" class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1"></a>
 </body>
 <script type="module">
 
-    /*
+	/*
 
-    Original text
+	Original text
 
 Your Mission
 Do not allow enemy paratroopers to land on either side of your gun base.
@@ -45,786 +45,786 @@ Enemy Paratrooper 5 points
 bomb 30 points
 Each bullet you fire costs you one point
 
-    */
-
-
-    // External functions copy&paste -------------------------------------------
-
-    // https://stackoverflow.com/a/37319954/3356840
-    function filterInPlace(a, condition, thisArg) {
-        let j = 0;
-        a.forEach((e, i) => {
-            if (!condition.call(thisArg, e, i, a)) {
-                if (i!==j) a[j] = e;
-                j++;
-            }
-        });
-        a.length = j;
-        return a;
-    }
-
-    export function all(iterable) {
-        for (let i of iterable) {
-            if (!i) {return false;}
-        }
-        return true;
-    }
-
-    export function* zip(...iterables) {
-        const iterators = [...iterables].map(iterable => iterable[Symbol.iterator]());
-        while (true) {
-            const iterable_items = iterators.map(iterator => iterator.next());
-            if (all(iterable_items.map(i => i.done))) {break;}
-            yield iterable_items.map(i => i.value);
-        }
-    }
-
-
-    function isObjectEmpty(obj) {return obj && Object.keys(obj).length === 0 && obj.constructor === Object;}  // https://stackoverflow.com/a/32108184
-
-
-    function mod(n, m) {return ((n % m) + m) % m;}
-    class Dimension {
-        constructor(...dimensions) {
-            this.dimensions = [...dimensions];
-        }
-        get width() {return this.dimensions[0];}
-        get height() {return this.dimensions[1];}
-        get size() {return this.dimensions.reduce((prev, current) => prev * current);}
-        normalise_position(...position) {
-            return [ // TODO: remove duplication? map?
-                mod(position[0], this.dimensions[0]),
-                mod(position[1], this.dimensions[1]),
-            ];
-        }
-        index_to_position(i) {
-            return [
-                mod(i, this.width),
-                mod(Math.floor(i/this.width), this.height),
-            ];
-        }
-        position_to_index(...position) {
-            const _position = this.normalise_position(...position);
-            return (this.width * _position[1]) + _position[0];
-        }
-    }
-
-
-    function _random_spread(random_spread=1) {
-        return (Math.random()*random_spread) - (random_spread/2)
-    }
-
-    export function randomSegment(segments, _func_random=Math.random) {
-        console.assert(Array.isArray(segments),"segments must be an array");
-        const weights = segments.map((a)=>a[1]-a[0]);
-        const sum = weights.reduce((sum,i)=>sum+=i, 0);
-        let r = Math.floor(_func_random()*sum);
-        for (let i=0 ; i<segments.length ; i++) {
-            const weight = weights[i];
-            if (r - weight < 0) {
-                return segments[i][0] + r;
-            }
-            r += -weight;
-        }
-    }
-
-
-    // Constants ---------------------------------------------------------------
-
-    const canvas = document.getElementById('canvas');
-    const c = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
-
-    // Events ------------------------------------------------------------------
-
-    const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
-
-    canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
-    function fire_gun(fire) {
-        const g = state.guns[0];
-        if (fire && g.fire == 0) {g.fire = state.frame;}
-        else                     {g.fire = 0;}
-    }
-    document.addEventListener('mouseup', (e) => {fire_gun(false)}, false);
-    document.addEventListener('keyup', (e) => {fire_gun(false)}, false);
-    document.addEventListener('mousedown', (e) => {fire_gun(true)}, false);
-    document.addEventListener('keydown', (e) => {fire_gun(keys_fire.indexOf(e.code)>=0)}, false);
-    document.addEventListener("pointermove", (e) => {
-        state.guns[0].angle -= e.movementX/180;
-    }, false);
-
-    // Running
-    function setRunning(running) {
-        state.running = running;
-        console.log("running", running);
-        if (!running && state.requestAnimationFrameId) {
-            cancelAnimationFrame(state.requestAnimationFrameId);
-            state.requestAnimationFrameId = undefined;
-        } else if (running && !state.requestAnimationFrameId) {
-            main();
-        }
-    }
-    window.addEventListener("focus", () => {setRunning(true)}, false);
-    window.addEventListener("blur", () => {setRunning(false)}, false);
-
-    window.addEventListener('resize', () => {show_github_fork();}, false);
-    function show_github_fork() {
-        document.getElementById("github_fork").style = `display: ${(window.innerWidth / window.innerHeight) <= 1.5 ? "none": "block"}`;
-    }
-    show_github_fork();
-
-
-    // Load images -------------------------------------------------------------
-
-    function flipX(imageData) {
-        const d = new Dimension(imageData.width, imageData.height);
-        const _imageData = c.createImageData(imageData);
-        for (let y=0 ; y<d.height; y++) {
-            for (let x=0 ; x<d.width; x++) {
-                const i = d.position_to_index(d.width-1-x, y);
-                const _i = d.position_to_index(x, y);
-                // copy in multiples of 4 as each pixel is 4 bytes RGBA
-                _imageData.data.set(imageData.data.slice(i*4, (i+1)*4), _i*4);
-            }
-        }
-        return _imageData;
-    }
-    function flipX_sprites(sprite_object) {
-        // Take a sprite object with each key as a sprite. Flip all sprites and inset as new key with `_flipX` appended
-        for (let key of Object.keys(sprite_object)) {
-            sprite_object[`${key}_flipX`] = flipX(sprite_object[key]);
-        }
-    }
-
-    function loadBase64Images(base64, sprite_location_data, sprite_output) {
-        const image = new Image();
-        image.onload = function() {
-            c.fillStyle = 'rgba(0,0,0,255)';  // TODO transparent??
-            c.fillRect(0, 0, w, h);
-            c.drawImage(image, 0, 0);
-            for (let [name, location] of Object.entries(sprite_location_data)) {
-                sprite_output[name] = c.getImageData(...location);
-            }
-
-            flipX_sprites(sprite_output);
-            loadComplete();
-        };
-        image.src = base64;
-    }
-
-    const sprites = {};
-    loadBase64Images(
-        "data:image/gif;base64,R0lGODlhSgAwAMIDAAAAAP9V/1X//////////////////////yH5BAEKAAQALAAAAABKADAAAAP+KErc/lAJSKu9VAAwcdWcJ47ZFpINeKIspnbs286fyUm4NOyDo945HK832o1+tiRn6FM6lzwR04N8bgRTQtWKjWKylQAh8AuYz2ZTjkG2odFqnMd4tHLHjK19RXuItUGBcg1igoYwfTNmJG+NbxeOjy10NJQzlhR/FENgmhWcXoQXoJhspDw2nA4Bpzupna0Dr6FsDpxOqqIEt0q5eAy8Sb5fdkSjxXPIRU/GxLjLzyin0qTUoDOI2SLaKds+3xaHax/iEuHlCxHmieyJgu3wKIfx9Bfl9fgP9/n8+/z4niAE/BdvYC0LYAiKMPhr0zCFHgYy3FUN4kKBCM3s0GhTcYSniRSvdYy4CmHIKM1GhjnoEJiXUiofwJS5S0GPlDFbzqG4K6eLdV+A+aSC6AvOoepIzESap+nOnkwzOEXYbKnPDkU32YrKtavXr2DDih3rMwEAOw==",
-        {
-            jet1: [0,0,24,10],
-            jet2: [24,0,24,10],
-            heli1: [0,10,24,10],
-            heli2: [24,10,24,10],
-            heli3: [48,10,24,10],
-            parachute: [0,20,12,14],
-            trooper: [4,34, 4, 8],
-            trooper_dead: [17,27, 12, 15],
-            bomb: [59, 4, 4, 4],
-        },
-        sprites,
-    );
-
-
-
-    /*
-    Design doc stuff
-    Points are arrays of two elements e.g [x, y] -> [10, 87]
-    */
-
-
-    // Game Objects ------------------------------------------------------------
-
-    class AbstractGameObject {
-        constructor(point, velocity) {
-            this.point_current = [...point];
-            this.velocity = [...velocity];
-            //this.bounds abstract
-        }
-        get expired() {
-            return this._expired;
-        }
-        get point() {
-            return this.point_current;
-        }
-        get pointInt() {
-            return this.point.map(Math.floor);
-        }
-        get x_edge() {
-            return this.point_current[0] + this.bounds[0];
-        }
-        set point(point) {
-            this.point_current.splice(0,2, ...point);
-        }
-        get isOutOfScreenBounds() {
-            const [x, y] = this.point;
-            return (x+this.bounds[0] < 0 || x > w || y < -20 || y+this.bounds[1] > h);
-        }
-        move() {
-            this.point = [
-                this.point_current[0] + this.velocity[0],
-                this.point_current[1] + this.velocity[1],
-            ];
-        }
-    }
-
-
-    class Bullet extends AbstractGameObject {
-        constructor(point, velocity) {
-            super(point, velocity);
-            this.point_previous = [...point];
-            this.bounds = [2, 2];
-        }
-        get points() {
-            return [this.point_current, this.point_previous];
-        }
-        get point() {
-            return this.point_current;
-        }
-        set point(point) {
-            this.point_previous.splice(0,2, ...this.point_current);
-            this.point_current.splice(0,2, ...point);  // duplicated in super? how call super? how?
-        }
-        get expired() {
-            return super.expired || this.isOutOfScreenBounds;
-        }
-        get color() {
-            return 'white';
-        }
-    }
-
-    class Particle extends AbstractGameObject {
-        constructor(point, velocity, color) {
-            super(point, velocity);
-            this.color = color;
-            this.bounds = [1,1];
-        }
-        get expired() {
-            return super.expired || this.isOutOfScreenBounds;
-        }
-        move() {
-            super.move();
-            this.velocity[1] = this.velocity[1] + 0.08;
-        }
-    }
-
-    function* particles(imageData, point, velocity=[0,0], func_random_spread=_random_spread) {
-        const d = new Dimension(imageData.width, imageData.height);
-        for (let i=0 ; i<imageData.data.length ; i+=4) {
-            const c = imageData.data.slice(i, i+4);
-            if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors (or black) do not create particles
-            yield new Particle(
-                Array.from(zip(point, d.index_to_position(i).slice(0,2))).map((p)=>p.reduce((acc,item)=>acc+=item)),  //[x + point[0], y + point[1]],
-                velocity.map((v)=>v+func_random_spread()),
-                `rgb(${c[0]},${c[1]},${c[2]})`,
-            );
-        }
-    }
-
-    class TimedSprite extends AbstractGameObject {
-        constructor(point, sprite, time_to_live=60) {
-            super(point, [0, 0]);
-            this.sprite = sprite;
-            this.bounds = [sprite.width, sprite.height];
-            this.time_to_live = time_to_live;
-        }
-        get expired() {
-            return super.expired || (this.time_to_live<=0);
-        }
-        move() {
-            super.move();
-            this.time_to_live--;
-        }
-    }
-
-    class AbstractEnemy extends AbstractGameObject {
-        constructor(point, velocity) {
-            super(point, velocity);
-            //this.bounds /// abstract
-        }
-        //get sprite() {}  // abstract
-        isPointInBounds(point) {
-            // This may not be sufficient for fast moving bullets ... we may need line crossing?
-            const [px, py] = point;
-            const [ix, iy] = this.point;
-            const [iw, ih] = this.bounds;
-            return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
-        }
-        * particles(velocity=[0,0]) {
-            yield* particles(this.sprite, this.point, [
-                this.velocity[0] + velocity[0]*0.8,
-                this.velocity[1] + velocity[1]*0.8,
-            ])
-        }
-
-    }
-
-    class AbstractEnemyAnimated extends AbstractEnemy {
-        constructor(point, velocity, sprite_names) {
-            super(point, velocity);
-            this.sprites_left = sprite_names.map((name)=>sprites[name]);
-            this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
-            this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
-            this.payloads = [];
-        }
-        get sprite() {
-            const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
-            return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
-        }
-        get expired() {
-            // has object left edge of screen?
-            return super.expired || (this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0);
-        }
-        get payload() {
-            const x = this.point[0];
-            let _p = undefined;
-            filterInPlace(this.payloads, function(p){
-                if (Math.abs(x - p.point[0]) < 3) {_p = p; return true;}
-            })
-            return _p;
-        }
-    }
-
-
-    class Jet extends AbstractEnemyAnimated {
-        constructor(point, velocity, number_of_bombs=1) {
-            super(point, velocity, ['jet1', 'jet2']);
-            this.score = 10;
-            if (Math.random()>0.5) {
-                const v = this.velocity[0];
-                const r = Math.floor(_random_spread(30));
-                this.payloads.push(new Bomb([(v>0?100:w-100)+r, this.point[1]+6], this.velocity));
-            }
-        }
-    }
-
-    class Heli extends AbstractEnemyAnimated {
-        constructor(point, velocity, number_of_paratroopers=2) {
-            super(point, velocity, ['heli1', 'heli2', 'heli3']);
-            this.score = 10;
-            function safe_x() {
-                return randomSegment([  // troops only fall in know area
-                    [w_crop_for_4_by_3, (w/2)-16-4],  // hard coded gun width of 32(16 each way)
-                    [(w/2)+16, w-w_crop_for_4_by_3-4], // 4 is the width of troop (hard coded)
-                ]);
-            }
-            for (let t=0 ; t<number_of_paratroopers ; t++) {
-                this.payloads.push(new Paratrooper([safe_x(), point[1]], [0, 1]));
-            }
-        }
-    }
-
-    class Paratrooper extends AbstractEnemy {
-        constructor(point, velocity) {
-            super(point, velocity);
-            this.sprite = sprites['trooper'];
-            this.bounds = [this.sprite.width, this.sprite.height];
-            this.parachute_threshold = point[1] + (Math.random() * h/4) + h/8;
-            this._parachute = new ParatrooperParachute(this);
-            this.score = 5;
-            this.parachute_open = false;
-        }
-        get payload() {
-            if (this.parachute_open == false && this.parachute) {
-                this.parachute_open = true;
-                return this._parachute;
-            }
-        }
-        get parachute() {
-            if (
-                this.parachute_threshold > 0 &&
-                this.point[1] > this.parachute_threshold &&
-                this._parachute &&
-                !this._parachute._expired
-            ) {return this._parachute;}
-        }
-        move() {
-            if (this.parachute) {
-                this.velocity[1] = Math.max(this.velocity[1]+=-0.1, 0.5);
-            } else {
-                this.velocity[1] = Math.max(this.velocity[1]+=0.08, 0.8);
-            }
-            super.move();
-        }
-    }
-
-    class ParatrooperParachute extends AbstractEnemy {
-        constructor(paratrooper) {
-            super([0, 0], [0, 0]);
-            this.paratrooper = paratrooper;
-            this.sprite = sprites['parachute'];
-            this.bounds = [this.sprite.width, this.sprite.height];
-            this.score = 0;  // score is from troops hitting the ground
-        }
-        get point() {
-            const p = this.paratrooper.point;
-            return [p[0]-4, p[1]-14];
-        }
-        move() {}  // disable movement - this is bound to the paratrooper
-    }
-
-    class Trooper extends AbstractEnemy {
-        constructor(point) {
-            super(point, [0, 0]);  // TODO?
-            this.sprite = sprites['trooper'];
-            this.bounds = [this.sprite.width, this.sprite.height];
-        }
-        move() {}  // disable movement - could be overridden later for walking troopers
-    }
-
-    class Bomb extends AbstractEnemy {
-        constructor(point, velocity) {
-            super(point, velocity);
-            this.sprite = sprites['bomb'];
-            this.bounds = [this.sprite.width, this.sprite.height];
-            this.score = 30;
-        }
-        move() {
-            this.velocity[1] = Math.min(this.velocity[1]+=0.03, 1.5);
-            super.move();
-        }
-    }
-
-    class Gun extends AbstractGameObject {
-        constructor(point, color='cyan') {
-            super(point, [0, 0]);
-            this.bounds = [32, 24];
-            this.length = 12;
-            this.gun_velocity = 3;
-            this.color = color;
-            this._angle = Math.PI;
-            this.angle_min = Math.PI - (Math.PI/2);
-            this.angle_max = Math.PI + (Math.PI/2);
-            this.fire = 0;  // the frame firing started
-        }
-        get angle() {
-            return this._angle;
-        }
-        set angle(angle) {
-            this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);
-        }
-        get gun_tip_point() {
-            return [
-                this.point[0] + (Math.sin(this.angle) * this.length),
-                this.point[1] + (Math.cos(this.angle) * this.length),
-            ];
-        }
-        get payload() {
-            if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0) {
-                return new Bullet(
-                    this.gun_tip_point,
-                    [Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
-                )
-            }
-        }
-        * particles() {
-            const x = this.point[0] - Math.floor(this.bounds[0]/2);
-            const y = this.point[1] - this.length;
-            //const height = state.ground - this.point[1];  //?? double check this?  // is this not just this.height+this.length??
-            const w = this.bounds[0];
-            const h = this.bounds[1] + this.length;
-            yield* particles(c.getImageData(x, y, w, h), [x, y], [0, -4]);
-        }
-        isPointInBounds(point) {  // override - the pos and width are centred in this object
-            const w = Math.floor(this.bounds[0]/2);
-            const [px, py] = point;
-            const [ix, iy] = [this.point[0]-w, this.point[1]];
-            const [iw, ih] = this.bounds;
-            return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
-        }
-    }
-
-
-    // Storage -----------------------------------------------------------------
-
-    function loadLocalData() {
-        const data = window.localStorage.getItem("paratrooper");
-        if (data) {
-            try {return JSON.parse(data);} catch {}
-        }
-        return {};
-    }
-    function saveLocalData(data) {
-        window.localStorage.setItem("paratrooper", JSON.stringify(data));
-    }
-
-
-    // Level -------------------------------------------------------------------
-
-    function setupLevelEnemies(state) {
-        const level = state.level;
-        const level_length = Math.floor((Math.random() * Math.max(level, 6) * 5) + (w * 2));
-        const num_heli = Math.floor(level * 1.5);
-        const num_jets = Math.floor(level * 1.5);
-        const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/2, 6)));
-        function random_start_x() {
-            let x = Math.random() * level_length;
-            if (Math.random() >= 0.5) {x += w;}
-            else                      {x = x * -1;}
-            return Math.floor(x);
-        }
-        for (let i=0 ; i<num_heli ; i++) {
-            const x = random_start_x();
-            state.game_objects.push(new Heli([x, 30+_random_spread(30)], [x>w?-1:1, 0], Math.floor(Math.random()*random_num_troops_max) ));
-        }
-        for (let i=0 ; i<num_heli ; i++) {
-            const x = random_start_x();
-            state.game_objects.push(new Jet([x, 30+_random_spread(30)], [x>w?-1:1, 0]));
-        }
-
-    }
-
-
-
-    // Game Model --------------------------------------------------------------
-
-    const state = {
-        running: true,
-        store: loadLocalData(),
-        input: {},
-        ground: h - 20,
-        guns: [],
-        game_objects: [],
-        //frame: 0,
-        //level: 0,
-        //score: 0,
-        //game_over: false,
-    };
-    reset();
-
-    function reset() {
-        state.game_over = false;
-        state.level = 0;
-        state.score = 0;
-        state.game_objects.length = 0;  // Clear all game_objects
-        state.frame = 0;
-
-        const gun = new Gun([w/2, h-24-20]);
-        state.guns = [gun];
-        state.game_objects.push(gun);
-    }
-
-
-    function endGame() {
-        if (state.game_over) {return;}
-        state.game_over = true;
-        if (state.score > state.store.hiscore || state.store.hiscore == undefined) {
-            state.store['hiscore'] = state.score;
-            saveLocalData(state.store);
-        }
-        for (let gun of state.guns) {
-            gun._expired = true;
-            for (let p of gun.particles()) {state.game_objects.push(p);}
-        }
-    }
-
-    function getGameObjectsOfType(game_object_type) {
-        return state.game_objects.filter((i)=>i.constructor.name == game_object_type);
-    }
-    function hasGameObjectsOfType(game_object_type) {
-        for (let game_object of state.game_objects) {
-            if (game_object.constructor.name == game_object_type) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function incrementModel(state) {
-
-        // Temp shortcuts?
-        const bullets = getGameObjectsOfType("Bullet");
-        const troops = getGameObjectsOfType("Trooper");
-        const gun = state.guns[0];
-        
-        //state.game_objects.sort((a,b)=>b.point[0]-a.point[0]);
-        //const active_game_objects = [];
-
-        // Game Objects -----
-        const game_object_count = [
-            'Bullet', 'Particle', 'Bomb', 'Jet', 'Heli', 'Paratrooper', 'Trooper', 'ParatrooperParachute', 'Gun',
-        ].reduce((o, key) => {o[key]=0; return o;}, {});
-        for (let o of state.game_objects) {
-            game_object_count[o.constructor.name]++;
-            //filterInPlace(active_game_objects, (a) => a.x_edge < o.point[0]);
-            //active_game_objects.push(o);
-            //console.log(active_game_objects.length);
-            //if (active_game_objects.length > 10){debugger;}
-
-            o.move();
-
-            // Launch Paratroopers
-            // Launch Bombs
-            // Open parachutes
-            if (["Jet", "Heli", "Paratrooper", "Gun"].indexOf(o.constructor.name) >= 0) {
-                const payload = o.payload;
-                if (payload) {
-                    state.game_objects.push(payload);
-                    if (payload.constructor.name == "Bullet") {
-                        state.score = Math.max(0, state.score-1);
-                    }
-                }
-            }
-
-            if (o.constructor.name == "Paratrooper") {
-                if (o.point[1] > state.ground - o.bounds[1]) {
-                    o._expired = true;
-                    if (o._parachute) {o._parachute._expired = true;}
-                    if (o.velocity[1] < 1) {
-                        state.game_objects.push(new Trooper(o.point));
-                    }
-                    else {
-                        state.score += o.score;
-                        state.game_objects.push(
-                            new TimedSprite([o.point[0]-4, state.ground-sprites['trooper_dead'].height-1], sprites['trooper_dead'])
-                        );
-                        for (let p of o.particles([0, -o.velocity[1]*2])) {state.game_objects.push(p);}
-
-                        // Crush nearby troopers
-                        for (let t of troops) {
-                            if (Math.abs(o.point[0] - t.point[0]) <= 6) {t._expired = true;}
-                        }
-                    }
-                }
-            }
-
-            //const bullets = active_game_objects.filter((o)=>o.constructor.name=="Bullet");
-            if (["Jet", "Heli", "Bomb", "Paratrooper", "ParatrooperParachute"].indexOf(o.constructor.name) >= 0) {
-                for (let b of bullets) {
-                    if (o.isPointInBounds(b.point)) {
-                        b._expired = true;
-                        o._expired = true;
-                        // HACK - Special case for expiring child objects of parachutes
-                        if (o._parachute) {o._parachute._expired = true;}
-                        for (let p of o.particles(b.velocity)) {state.game_objects.push(p);}
-                        state.score += o.score || 0;
-                    }
-                }
-            }
-
-            // Bombs hitting guns
-            if (o.constructor.name == "Bomb") {
-                if (gun.isPointInBounds(o.point)) {
-                    o._expired = true;
-                    endGame();
-                }
-                if (o.point[1] > state.ground) {
-                    o._expired = true;
-                    for (let p of o.particles([o.velocity[0],-o.velocity[1]*3])) {state.game_objects.push(p);}
-                }
-            }
-
-        }
-
-        // Game over by troops?
-        const troops_left = troops.filter((t)=>t.point[0] > gun.point[0]).length;
-        const troops_right = troops.filter((t)=>t.point[0] < gun.point[0]).length;
-        if (troops_left>=4 || troops_right>=4) {
-            endGame();
-        }
-
-        filterInPlace(state.game_objects, (o)=>o.expired);
-        state.frame++;
-
-        // Reset (after all particles have expired)
-        if (state.game_over && !hasGameObjectsOfType("Particle")) {
-            reset();
-        }
-        // End level
-        if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
-            state.level++;
-            setupLevelEnemies(state);
-        }
-
-
-    }
-
-    // Render ------------------------------------------------------------------
-
-    function render(c, state) {
-        c.fillStyle = 'black';
-        c.fillRect(0, 0, w, h);
-
-        
-        function drawGun(gun) {
-            const [x, y, width] = [...gun.point, Math.floor(gun.bounds[0]/2)];
-            c.lineCap = "round";
-            // Gun Barrel
-            c.beginPath();
-            c.strokeStyle = 'cyan';
-            c.lineWidth = 4;
-            c.moveTo(...gun.point);
-            c.lineTo(...gun.gun_tip_point);
-            c.stroke();
-            // Gun Turret
-            c.beginPath();
-            c.strokeStyle = 'magenta';
-            c.lineWidth = 8;
-            c.moveTo(...gun.point);
-            c.lineTo(x, y+16);
-            c.stroke();
-            // Gun Base
-            c.fillStyle = 'white';
-            c.fillRect(x-width, y, width*2, gun.bounds[1]);
-        }
-        if (!state.game_over) {
-            drawGun(state.guns[0]);
-        }
-        
-
-        // Ground
-        c.strokeStyle = 'cyan';
-        c.lineWidth = 2;
-        c.beginPath();
-        c.moveTo(0, state.ground);
-        c.lineTo(w, state.ground);
-        c.stroke();
-        // Side buffers
-        c.fillStyle = 'magenta';
-        c.fillRect(0, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
-        c.fillRect(w-w_crop_for_4_by_3, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
-
-
-        c.fillStyle = 'white';
-        c.fillText(`Level: ${state.level}`, 80, h-6);
-        c.fillText(`Score: ${state.score}`, 160, h-6);
-        c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
-
-
-        for (let o of state.game_objects) {
-            const sprite = o.sprite;
-            if (sprite) {
-                c.putImageData(sprite, ...o.pointInt);
-            }
-            else if (o.constructor.name == "Gun") {}  // Skip guns
-            else {
-                c.fillStyle = o.color;
-                c.fillRect(...o.pointInt, ...o.bounds);
-            }
-        }
-
-    }
-
-
-    function loadComplete() {
-        main();
-    }
-
-    function main(time) {
-        if (c && state.running) {
-            incrementModel(state);
-            render(c, state);
-        }
-        if (state.running) {
-            state.requestAnimationFrameId = requestAnimationFrame(main);
-        }
-    }
+	*/
+
+
+	// External functions copy&paste -------------------------------------------
+
+	// https://stackoverflow.com/a/37319954/3356840
+	function filterInPlace(a, condition, thisArg) {
+		let j = 0;
+		a.forEach((e, i) => {
+			if (!condition.call(thisArg, e, i, a)) {
+				if (i!==j) a[j] = e;
+				j++;
+			}
+		});
+		a.length = j;
+		return a;
+	}
+
+	export function all(iterable) {
+		for (let i of iterable) {
+			if (!i) {return false;}
+		}
+		return true;
+	}
+
+	export function* zip(...iterables) {
+		const iterators = [...iterables].map(iterable => iterable[Symbol.iterator]());
+		while (true) {
+			const iterable_items = iterators.map(iterator => iterator.next());
+			if (all(iterable_items.map(i => i.done))) {break;}
+			yield iterable_items.map(i => i.value);
+		}
+	}
+
+
+	function isObjectEmpty(obj) {return obj && Object.keys(obj).length === 0 && obj.constructor === Object;}  // https://stackoverflow.com/a/32108184
+
+
+	function mod(n, m) {return ((n % m) + m) % m;}
+	class Dimension {
+		constructor(...dimensions) {
+			this.dimensions = [...dimensions];
+		}
+		get width() {return this.dimensions[0];}
+		get height() {return this.dimensions[1];}
+		get size() {return this.dimensions.reduce((prev, current) => prev * current);}
+		normalise_position(...position) {
+			return [ // TODO: remove duplication? map?
+				mod(position[0], this.dimensions[0]),
+				mod(position[1], this.dimensions[1]),
+			];
+		}
+		index_to_position(i) {
+			return [
+				mod(i, this.width),
+				mod(Math.floor(i/this.width), this.height),
+			];
+		}
+		position_to_index(...position) {
+			const _position = this.normalise_position(...position);
+			return (this.width * _position[1]) + _position[0];
+		}
+	}
+
+
+	function _random_spread(random_spread=1) {
+		return (Math.random()*random_spread) - (random_spread/2)
+	}
+
+	export function randomSegment(segments, _func_random=Math.random) {
+		console.assert(Array.isArray(segments),"segments must be an array");
+		const weights = segments.map((a)=>a[1]-a[0]);
+		const sum = weights.reduce((sum,i)=>sum+=i, 0);
+		let r = Math.floor(_func_random()*sum);
+		for (let i=0 ; i<segments.length ; i++) {
+			const weight = weights[i];
+			if (r - weight < 0) {
+				return segments[i][0] + r;
+			}
+			r += -weight;
+		}
+	}
+
+
+	// Constants ---------------------------------------------------------------
+
+	const canvas = document.getElementById('canvas');
+	const c = canvas.getContext('2d');
+	const w = canvas.width;
+	const h = canvas.height;
+	const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
+
+	// Events ------------------------------------------------------------------
+
+	const keys_fire = ["Space", "ControlLeft", "KeyZ", "KeyX"];
+
+	canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
+	function fire_gun(fire) {
+		const g = state.guns[0];
+		if (fire && g.fire == 0) {g.fire = state.frame;}
+		else                     {g.fire = 0;}
+	}
+	document.addEventListener('mouseup', (e) => {fire_gun(false)}, false);
+	document.addEventListener('keyup', (e) => {fire_gun(false)}, false);
+	document.addEventListener('mousedown', (e) => {fire_gun(true)}, false);
+	document.addEventListener('keydown', (e) => {fire_gun(keys_fire.indexOf(e.code)>=0)}, false);
+	document.addEventListener("pointermove", (e) => {
+		state.guns[0].angle -= e.movementX/180;
+	}, false);
+
+	// Running
+	function setRunning(running) {
+		state.running = running;
+		console.log("running", running);
+		if (!running && state.requestAnimationFrameId) {
+			cancelAnimationFrame(state.requestAnimationFrameId);
+			state.requestAnimationFrameId = undefined;
+		} else if (running && !state.requestAnimationFrameId) {
+			main();
+		}
+	}
+	window.addEventListener("focus", () => {setRunning(true)}, false);
+	window.addEventListener("blur", () => {setRunning(false)}, false);
+
+	window.addEventListener('resize', () => {show_github_fork();}, false);
+	function show_github_fork() {
+		document.getElementById("github_fork").style = `display: ${(window.innerWidth / window.innerHeight) <= 1.5 ? "none": "block"}`;
+	}
+	show_github_fork();
+
+
+	// Load images -------------------------------------------------------------
+
+	function flipX(imageData) {
+		const d = new Dimension(imageData.width, imageData.height);
+		const _imageData = c.createImageData(imageData);
+		for (let y=0 ; y<d.height; y++) {
+			for (let x=0 ; x<d.width; x++) {
+				const i = d.position_to_index(d.width-1-x, y);
+				const _i = d.position_to_index(x, y);
+				// copy in multiples of 4 as each pixel is 4 bytes RGBA
+				_imageData.data.set(imageData.data.slice(i*4, (i+1)*4), _i*4);
+			}
+		}
+		return _imageData;
+	}
+	function flipX_sprites(sprite_object) {
+		// Take a sprite object with each key as a sprite. Flip all sprites and inset as new key with `_flipX` appended
+		for (let key of Object.keys(sprite_object)) {
+			sprite_object[`${key}_flipX`] = flipX(sprite_object[key]);
+		}
+	}
+
+	function loadBase64Images(base64, sprite_location_data, sprite_output) {
+		const image = new Image();
+		image.onload = function() {
+			c.fillStyle = 'rgba(0,0,0,255)';  // TODO transparent??
+			c.fillRect(0, 0, w, h);
+			c.drawImage(image, 0, 0);
+			for (let [name, location] of Object.entries(sprite_location_data)) {
+				sprite_output[name] = c.getImageData(...location);
+			}
+
+			flipX_sprites(sprite_output);
+			loadComplete();
+		};
+		image.src = base64;
+	}
+
+	const sprites = {};
+	loadBase64Images(
+		"data:image/gif;base64,R0lGODlhSgAwAMIDAAAAAP9V/1X//////////////////////yH5BAEKAAQALAAAAABKADAAAAP+KErc/lAJSKu9VAAwcdWcJ47ZFpINeKIspnbs286fyUm4NOyDo945HK832o1+tiRn6FM6lzwR04N8bgRTQtWKjWKylQAh8AuYz2ZTjkG2odFqnMd4tHLHjK19RXuItUGBcg1igoYwfTNmJG+NbxeOjy10NJQzlhR/FENgmhWcXoQXoJhspDw2nA4Bpzupna0Dr6FsDpxOqqIEt0q5eAy8Sb5fdkSjxXPIRU/GxLjLzyin0qTUoDOI2SLaKds+3xaHax/iEuHlCxHmieyJgu3wKIfx9Bfl9fgP9/n8+/z4niAE/BdvYC0LYAiKMPhr0zCFHgYy3FUN4kKBCM3s0GhTcYSniRSvdYy4CmHIKM1GhjnoEJiXUiofwJS5S0GPlDFbzqG4K6eLdV+A+aSC6AvOoepIzESap+nOnkwzOEXYbKnPDkU32YrKtavXr2DDih3rMwEAOw==",
+		{
+			jet1: [0,0,24,10],
+			jet2: [24,0,24,10],
+			heli1: [0,10,24,10],
+			heli2: [24,10,24,10],
+			heli3: [48,10,24,10],
+			parachute: [0,20,12,14],
+			trooper: [4,34, 4, 8],
+			trooper_dead: [17,27, 12, 15],
+			bomb: [59, 4, 4, 4],
+		},
+		sprites,
+	);
+
+
+
+	/*
+	Design doc stuff
+	Points are arrays of two elements e.g [x, y] -> [10, 87]
+	*/
+
+
+	// Game Objects ------------------------------------------------------------
+
+	class AbstractGameObject {
+		constructor(point, velocity) {
+			this.point_current = [...point];
+			this.velocity = [...velocity];
+			//this.bounds abstract
+		}
+		get expired() {
+			return this._expired;
+		}
+		get point() {
+			return this.point_current;
+		}
+		get pointInt() {
+			return this.point.map(Math.floor);
+		}
+		get x_edge() {
+			return this.point_current[0] + this.bounds[0];
+		}
+		set point(point) {
+			this.point_current.splice(0,2, ...point);
+		}
+		get isOutOfScreenBounds() {
+			const [x, y] = this.point;
+			return (x+this.bounds[0] < 0 || x > w || y < -20 || y+this.bounds[1] > h);
+		}
+		move() {
+			this.point = [
+				this.point_current[0] + this.velocity[0],
+				this.point_current[1] + this.velocity[1],
+			];
+		}
+	}
+
+
+	class Bullet extends AbstractGameObject {
+		constructor(point, velocity) {
+			super(point, velocity);
+			this.point_previous = [...point];
+			this.bounds = [2, 2];
+		}
+		get points() {
+			return [this.point_current, this.point_previous];
+		}
+		get point() {
+			return this.point_current;
+		}
+		set point(point) {
+			this.point_previous.splice(0,2, ...this.point_current);
+			this.point_current.splice(0,2, ...point);  // duplicated in super? how call super? how?
+		}
+		get expired() {
+			return super.expired || this.isOutOfScreenBounds;
+		}
+		get color() {
+			return 'white';
+		}
+	}
+
+	class Particle extends AbstractGameObject {
+		constructor(point, velocity, color) {
+			super(point, velocity);
+			this.color = color;
+			this.bounds = [1,1];
+		}
+		get expired() {
+			return super.expired || this.isOutOfScreenBounds;
+		}
+		move() {
+			super.move();
+			this.velocity[1] = this.velocity[1] + 0.08;
+		}
+	}
+
+	function* particles(imageData, point, velocity=[0,0], func_random_spread=_random_spread) {
+		const d = new Dimension(imageData.width, imageData.height);
+		for (let i=0 ; i<imageData.data.length ; i+=4) {
+			const c = imageData.data.slice(i, i+4);
+			if (c[3]<255 || (c[0]==0 && c[1]==0 && c[2]==0)) {continue;}  // non solid colors (or black) do not create particles
+			yield new Particle(
+				Array.from(zip(point, d.index_to_position(i).slice(0,2))).map((p)=>p.reduce((acc,item)=>acc+=item)),  //[x + point[0], y + point[1]],
+				velocity.map((v)=>v+func_random_spread()),
+				`rgb(${c[0]},${c[1]},${c[2]})`,
+			);
+		}
+	}
+
+	class TimedSprite extends AbstractGameObject {
+		constructor(point, sprite, time_to_live=60) {
+			super(point, [0, 0]);
+			this.sprite = sprite;
+			this.bounds = [sprite.width, sprite.height];
+			this.time_to_live = time_to_live;
+		}
+		get expired() {
+			return super.expired || (this.time_to_live<=0);
+		}
+		move() {
+			super.move();
+			this.time_to_live--;
+		}
+	}
+
+	class AbstractEnemy extends AbstractGameObject {
+		constructor(point, velocity) {
+			super(point, velocity);
+			//this.bounds /// abstract
+		}
+		//get sprite() {}  // abstract
+		isPointInBounds(point) {
+			// This may not be sufficient for fast moving bullets ... we may need line crossing?
+			const [px, py] = point;
+			const [ix, iy] = this.point;
+			const [iw, ih] = this.bounds;
+			return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+		}
+		* particles(velocity=[0,0]) {
+			yield* particles(this.sprite, this.point, [
+				this.velocity[0] + velocity[0]*0.8,
+				this.velocity[1] + velocity[1]*0.8,
+			])
+		}
+
+	}
+
+	class AbstractEnemyAnimated extends AbstractEnemy {
+		constructor(point, velocity, sprite_names) {
+			super(point, velocity);
+			this.sprites_left = sprite_names.map((name)=>sprites[name]);
+			this.sprites_right = sprite_names.map((name)=>sprites[`${name}_flipX`]);
+			this.bounds = [this.sprites_left[0].width, this.sprites_left[0].height];
+			this.payloads = [];
+		}
+		get sprite() {
+			const frame = mod(Math.floor(this.point[0] / 4), this.sprites_left.length);
+			return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
+		}
+		get expired() {
+			// has object left edge of screen?
+			return super.expired || (this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0);
+		}
+		get payload() {
+			const x = this.point[0];
+			let _p = undefined;
+			filterInPlace(this.payloads, function(p){
+				if (Math.abs(x - p.point[0]) < 3) {_p = p; return true;}
+			})
+			return _p;
+		}
+	}
+
+
+	class Jet extends AbstractEnemyAnimated {
+		constructor(point, velocity, number_of_bombs=1) {
+			super(point, velocity, ['jet1', 'jet2']);
+			this.score = 10;
+			if (Math.random()>0.5) {
+				const v = this.velocity[0];
+				const r = Math.floor(_random_spread(30));
+				this.payloads.push(new Bomb([(v>0?100:w-100)+r, this.point[1]+6], this.velocity));
+			}
+		}
+	}
+
+	class Heli extends AbstractEnemyAnimated {
+		constructor(point, velocity, number_of_paratroopers=2) {
+			super(point, velocity, ['heli1', 'heli2', 'heli3']);
+			this.score = 10;
+			function safe_x() {
+				return randomSegment([  // troops only fall in know area
+					[w_crop_for_4_by_3, (w/2)-16-4],  // hard coded gun width of 32(16 each way)
+					[(w/2)+16, w-w_crop_for_4_by_3-4], // 4 is the width of troop (hard coded)
+				]);
+			}
+			for (let t=0 ; t<number_of_paratroopers ; t++) {
+				this.payloads.push(new Paratrooper([safe_x(), point[1]], [0, 1]));
+			}
+		}
+	}
+
+	class Paratrooper extends AbstractEnemy {
+		constructor(point, velocity) {
+			super(point, velocity);
+			this.sprite = sprites['trooper'];
+			this.bounds = [this.sprite.width, this.sprite.height];
+			this.parachute_threshold = point[1] + (Math.random() * h/4) + h/8;
+			this._parachute = new ParatrooperParachute(this);
+			this.score = 5;
+			this.parachute_open = false;
+		}
+		get payload() {
+			if (this.parachute_open == false && this.parachute) {
+				this.parachute_open = true;
+				return this._parachute;
+			}
+		}
+		get parachute() {
+			if (
+				this.parachute_threshold > 0 &&
+				this.point[1] > this.parachute_threshold &&
+				this._parachute &&
+				!this._parachute._expired
+			) {return this._parachute;}
+		}
+		move() {
+			if (this.parachute) {
+				this.velocity[1] = Math.max(this.velocity[1]+=-0.1, 0.5);
+			} else {
+				this.velocity[1] = Math.max(this.velocity[1]+=0.08, 0.8);
+			}
+			super.move();
+		}
+	}
+
+	class ParatrooperParachute extends AbstractEnemy {
+		constructor(paratrooper) {
+			super([0, 0], [0, 0]);
+			this.paratrooper = paratrooper;
+			this.sprite = sprites['parachute'];
+			this.bounds = [this.sprite.width, this.sprite.height];
+			this.score = 0;  // score is from troops hitting the ground
+		}
+		get point() {
+			const p = this.paratrooper.point;
+			return [p[0]-4, p[1]-14];
+		}
+		move() {}  // disable movement - this is bound to the paratrooper
+	}
+
+	class Trooper extends AbstractEnemy {
+		constructor(point) {
+			super(point, [0, 0]);  // TODO?
+			this.sprite = sprites['trooper'];
+			this.bounds = [this.sprite.width, this.sprite.height];
+		}
+		move() {}  // disable movement - could be overridden later for walking troopers
+	}
+
+	class Bomb extends AbstractEnemy {
+		constructor(point, velocity) {
+			super(point, velocity);
+			this.sprite = sprites['bomb'];
+			this.bounds = [this.sprite.width, this.sprite.height];
+			this.score = 30;
+		}
+		move() {
+			this.velocity[1] = Math.min(this.velocity[1]+=0.03, 1.5);
+			super.move();
+		}
+	}
+
+	class Gun extends AbstractGameObject {
+		constructor(point, color='cyan') {
+			super(point, [0, 0]);
+			this.bounds = [32, 24];
+			this.length = 12;
+			this.gun_velocity = 3;
+			this.color = color;
+			this._angle = Math.PI;
+			this.angle_min = Math.PI - (Math.PI/2);
+			this.angle_max = Math.PI + (Math.PI/2);
+			this.fire = 0;  // the frame firing started
+		}
+		get angle() {
+			return this._angle;
+		}
+		set angle(angle) {
+			this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);
+		}
+		get gun_tip_point() {
+			return [
+				this.point[0] + (Math.sin(this.angle) * this.length),
+				this.point[1] + (Math.cos(this.angle) * this.length),
+			];
+		}
+		get payload() {
+			if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0) {
+				return new Bullet(
+					this.gun_tip_point,
+					[Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
+				)
+			}
+		}
+		* particles() {
+			const x = this.point[0] - Math.floor(this.bounds[0]/2);
+			const y = this.point[1] - this.length;
+			//const height = state.ground - this.point[1];  //?? double check this?  // is this not just this.height+this.length??
+			const w = this.bounds[0];
+			const h = this.bounds[1] + this.length;
+			yield* particles(c.getImageData(x, y, w, h), [x, y], [0, -4]);
+		}
+		isPointInBounds(point) {  // override - the pos and width are centred in this object
+			const w = Math.floor(this.bounds[0]/2);
+			const [px, py] = point;
+			const [ix, iy] = [this.point[0]-w, this.point[1]];
+			const [iw, ih] = this.bounds;
+			return (px>=ix && px<=ix+iw && py>=iy && py<=iy+ih);
+		}
+	}
+
+
+	// Storage -----------------------------------------------------------------
+
+	function loadLocalData() {
+		const data = window.localStorage.getItem("paratrooper");
+		if (data) {
+			try {return JSON.parse(data);} catch {}
+		}
+		return {};
+	}
+	function saveLocalData(data) {
+		window.localStorage.setItem("paratrooper", JSON.stringify(data));
+	}
+
+
+	// Level -------------------------------------------------------------------
+
+	function setupLevelEnemies(state) {
+		const level = state.level;
+		const level_length = Math.floor((Math.random() * Math.max(level, 6) * 5) + (w * 2));
+		const num_heli = Math.floor(level * 1.5);
+		const num_jets = Math.floor(level * 1.5);
+		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/2, 6)));
+		function random_start_x() {
+			let x = Math.random() * level_length;
+			if (Math.random() >= 0.5) {x += w;}
+			else                      {x = x * -1;}
+			return Math.floor(x);
+		}
+		for (let i=0 ; i<num_heli ; i++) {
+			const x = random_start_x();
+			state.game_objects.push(new Heli([x, 30+_random_spread(30)], [x>w?-1:1, 0], Math.floor(Math.random()*random_num_troops_max) ));
+		}
+		for (let i=0 ; i<num_heli ; i++) {
+			const x = random_start_x();
+			state.game_objects.push(new Jet([x, 30+_random_spread(30)], [x>w?-1:1, 0]));
+		}
+
+	}
+
+
+
+	// Game Model --------------------------------------------------------------
+
+	const state = {
+		running: true,
+		store: loadLocalData(),
+		input: {},
+		ground: h - 20,
+		guns: [],
+		game_objects: [],
+		//frame: 0,
+		//level: 0,
+		//score: 0,
+		//game_over: false,
+	};
+	reset();
+
+	function reset() {
+		state.game_over = false;
+		state.level = 0;
+		state.score = 0;
+		state.game_objects.length = 0;  // Clear all game_objects
+		state.frame = 0;
+
+		const gun = new Gun([w/2, h-24-20]);
+		state.guns = [gun];
+		state.game_objects.push(gun);
+	}
+
+
+	function endGame() {
+		if (state.game_over) {return;}
+		state.game_over = true;
+		if (state.score > state.store.hiscore || state.store.hiscore == undefined) {
+			state.store['hiscore'] = state.score;
+			saveLocalData(state.store);
+		}
+		for (let gun of state.guns) {
+			gun._expired = true;
+			for (let p of gun.particles()) {state.game_objects.push(p);}
+		}
+	}
+
+	function getGameObjectsOfType(game_object_type) {
+		return state.game_objects.filter((i)=>i.constructor.name == game_object_type);
+	}
+	function hasGameObjectsOfType(game_object_type) {
+		for (let game_object of state.game_objects) {
+			if (game_object.constructor.name == game_object_type) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	function incrementModel(state) {
+
+		// Temp shortcuts?
+		const bullets = getGameObjectsOfType("Bullet");
+		const troops = getGameObjectsOfType("Trooper");
+		const gun = state.guns[0];
+		
+		//state.game_objects.sort((a,b)=>b.point[0]-a.point[0]);
+		//const active_game_objects = [];
+
+		// Game Objects -----
+		const game_object_count = [
+			'Bullet', 'Particle', 'Bomb', 'Jet', 'Heli', 'Paratrooper', 'Trooper', 'ParatrooperParachute', 'Gun',
+		].reduce((o, key) => {o[key]=0; return o;}, {});
+		for (let o of state.game_objects) {
+			game_object_count[o.constructor.name]++;
+			//filterInPlace(active_game_objects, (a) => a.x_edge < o.point[0]);
+			//active_game_objects.push(o);
+			//console.log(active_game_objects.length);
+			//if (active_game_objects.length > 10){debugger;}
+
+			o.move();
+
+			// Launch Paratroopers
+			// Launch Bombs
+			// Open parachutes
+			if (["Jet", "Heli", "Paratrooper", "Gun"].indexOf(o.constructor.name) >= 0) {
+				const payload = o.payload;
+				if (payload) {
+					state.game_objects.push(payload);
+					if (payload.constructor.name == "Bullet") {
+						state.score = Math.max(0, state.score-1);
+					}
+				}
+			}
+
+			if (o.constructor.name == "Paratrooper") {
+				if (o.point[1] > state.ground - o.bounds[1]) {
+					o._expired = true;
+					if (o._parachute) {o._parachute._expired = true;}
+					if (o.velocity[1] < 1) {
+						state.game_objects.push(new Trooper(o.point));
+					}
+					else {
+						state.score += o.score;
+						state.game_objects.push(
+							new TimedSprite([o.point[0]-4, state.ground-sprites['trooper_dead'].height-1], sprites['trooper_dead'])
+						);
+						for (let p of o.particles([0, -o.velocity[1]*2])) {state.game_objects.push(p);}
+
+						// Crush nearby troopers
+						for (let t of troops) {
+							if (Math.abs(o.point[0] - t.point[0]) <= 6) {t._expired = true;}
+						}
+					}
+				}
+			}
+
+			//const bullets = active_game_objects.filter((o)=>o.constructor.name=="Bullet");
+			if (["Jet", "Heli", "Bomb", "Paratrooper", "ParatrooperParachute"].indexOf(o.constructor.name) >= 0) {
+				for (let b of bullets) {
+					if (o.isPointInBounds(b.point)) {
+						b._expired = true;
+						o._expired = true;
+						// HACK - Special case for expiring child objects of parachutes
+						if (o._parachute) {o._parachute._expired = true;}
+						for (let p of o.particles(b.velocity)) {state.game_objects.push(p);}
+						state.score += o.score || 0;
+					}
+				}
+			}
+
+			// Bombs hitting guns
+			if (o.constructor.name == "Bomb") {
+				if (gun.isPointInBounds(o.point)) {
+					o._expired = true;
+					endGame();
+				}
+				if (o.point[1] > state.ground) {
+					o._expired = true;
+					for (let p of o.particles([o.velocity[0],-o.velocity[1]*3])) {state.game_objects.push(p);}
+				}
+			}
+
+		}
+
+		// Game over by troops?
+		const troops_left = troops.filter((t)=>t.point[0] > gun.point[0]).length;
+		const troops_right = troops.filter((t)=>t.point[0] < gun.point[0]).length;
+		if (troops_left>=4 || troops_right>=4) {
+			endGame();
+		}
+
+		filterInPlace(state.game_objects, (o)=>o.expired);
+		state.frame++;
+
+		// Reset (after all particles have expired)
+		if (state.game_over && !hasGameObjectsOfType("Particle")) {
+			reset();
+		}
+		// End level
+		if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
+			state.level++;
+			setupLevelEnemies(state);
+		}
+
+
+	}
+
+	// Render ------------------------------------------------------------------
+
+	function render(c, state) {
+		c.fillStyle = 'black';
+		c.fillRect(0, 0, w, h);
+
+		
+		function drawGun(gun) {
+			const [x, y, width] = [...gun.point, Math.floor(gun.bounds[0]/2)];
+			c.lineCap = "round";
+			// Gun Barrel
+			c.beginPath();
+			c.strokeStyle = 'cyan';
+			c.lineWidth = 4;
+			c.moveTo(...gun.point);
+			c.lineTo(...gun.gun_tip_point);
+			c.stroke();
+			// Gun Turret
+			c.beginPath();
+			c.strokeStyle = 'magenta';
+			c.lineWidth = 8;
+			c.moveTo(...gun.point);
+			c.lineTo(x, y+16);
+			c.stroke();
+			// Gun Base
+			c.fillStyle = 'white';
+			c.fillRect(x-width, y, width*2, gun.bounds[1]);
+		}
+		if (!state.game_over) {
+			drawGun(state.guns[0]);
+		}
+		
+
+		// Ground
+		c.strokeStyle = 'cyan';
+		c.lineWidth = 2;
+		c.beginPath();
+		c.moveTo(0, state.ground);
+		c.lineTo(w, state.ground);
+		c.stroke();
+		// Side buffers
+		c.fillStyle = 'magenta';
+		c.fillRect(0, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
+		c.fillRect(w-w_crop_for_4_by_3, h-w_crop_for_4_by_3, w_crop_for_4_by_3, w_crop_for_4_by_3);
+
+
+		c.fillStyle = 'white';
+		c.fillText(`Level: ${state.level}`, 80, h-6);
+		c.fillText(`Score: ${state.score}`, 160, h-6);
+		c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
+
+
+		for (let o of state.game_objects) {
+			const sprite = o.sprite;
+			if (sprite) {
+				c.putImageData(sprite, ...o.pointInt);
+			}
+			else if (o.constructor.name == "Gun") {}  // Skip guns
+			else {
+				c.fillStyle = o.color;
+				c.fillRect(...o.pointInt, ...o.bounds);
+			}
+		}
+
+	}
+
+
+	function loadComplete() {
+		main();
+	}
+
+	function main(time) {
+		if (c && state.running) {
+			incrementModel(state);
+			render(c, state);
+		}
+		if (state.running) {
+			state.requestAnimationFrameId = requestAnimationFrame(main);
+		}
+	}
 
 </script>
 </html>
