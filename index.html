@@ -524,15 +524,16 @@ Each bullet you fire costs you one point
 			this.gun_velocity = 3;
 			this.color = color;
 			this._angle = Math.PI;
-			//this.angle_min = Math.PI - (Math.PI/2);
-			//this.angle_max = Math.PI + (Math.PI/2);
+			this.angle_min = Math.PI - (Math.PI/2);
+			this.angle_max = Math.PI + (Math.PI/2);
 			this.fire = 0;  // the frame firing started
 		}
 		get angle() {
 			return this._angle;
 		}
 		set angle(angle) {
-			this._angle = normaliseAngle(angle); //Math.max(Math.min(angle, this.angle_max), this.angle_min);
+			this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);  // Disble shield
+			//this._angle = normaliseAngle(angle);
 		}
 		gun_tip_point(angle=0) {
 			return [
@@ -542,7 +543,7 @@ Each bullet you fire costs you one point
 		}
 		get payload() {
 			if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0 &&
-				this.angle>Math.PI/2 && this.angle<Math.PI*1.5) {
+				this.angle>=Math.PI/2 && this.angle<=Math.PI*1.5) {
 				return new Bullet(
 					this.gun_tip_point(),
 					[Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
@@ -606,9 +607,9 @@ Each bullet you fire costs you one point
 	function setupLevelEnemies(state) {
 		const level = state.level;
 		const level_length = Math.floor((Math.random() * Math.max(level, 6) * 5) + (w * 2));
-		const num_heli = Math.floor(level * 2) + 2;
+		const num_heli = Math.floor(level * 1) + 4;
 		const num_jets = Math.floor(level * 1);
-		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level, 5)));
+		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/2, 5)));
 		function random_start_x() {
 			let x = Math.random() * level_length;
 			if (Math.random() >= 0.5) {x += w;}
