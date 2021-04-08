@@ -905,11 +905,12 @@ Each bullet you fire costs you one point
 		if (!time) {state.epoch = undefined;}
 		if (!state.epoch && time) {state.epoch = time;}
 		const this_frame = Math.floor((time - state.epoch) / milliseconds_per_frame);
-		for (let f=0 ; f<this_frame-state.frame ; f++) {
+		const frames_to_render = this_frame - state.frame;
+		for (let f=0 ; f<frames_to_render ; f++) {
 			incrementModel(state);
 		}
+		if (c && frames_to_render) {render(c, state);}
 		state.frame = this_frame;
-		if (c) {render(c, state);}
 	}
 
 </script>
