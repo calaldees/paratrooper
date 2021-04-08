@@ -524,16 +524,17 @@ Each bullet you fire costs you one point
 			this.gun_velocity = 3;
 			this.color = color;
 			this._angle = Math.PI;
-			this.angle_min = Math.PI - (Math.PI/2);
-			this.angle_max = Math.PI + (Math.PI/2);
+			const overshoot_angle = 0.1;
+			this.angle_min = Math.PI - (Math.PI/2) - overshoot_angle;
+			this.angle_max = Math.PI + (Math.PI/2) + overshoot_angle;
 			this.fire = 0;  // the frame firing started
 		}
 		get angle() {
 			return this._angle;
 		}
 		set angle(angle) {
-			this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);  // Disble shield
-			//this._angle = normaliseAngle(angle);
+			//this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);  // Disble shield
+			this._angle = normaliseAngle(angle);
 		}
 		gun_tip_point(angle=0) {
 			return [
@@ -543,7 +544,7 @@ Each bullet you fire costs you one point
 		}
 		get payload() {
 			if (!this.expired && this.fire && (state.frame - this.fire) % 8 == 0 &&
-				this.angle>=Math.PI/2 && this.angle<=Math.PI*1.5) {
+				this.angle>=this.angle_min && this.angle<=this.angle_max) {
 				return new Bullet(
 					this.gun_tip_point(),
 					[Math.sin(this.angle) * this.gun_velocity, Math.cos(this.angle) * this.gun_velocity],
