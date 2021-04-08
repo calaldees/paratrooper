@@ -393,8 +393,8 @@ Each bullet you fire costs you one point
 			return (this.velocity[0]>0 ? this.sprites_left : this.sprites_right)[frame];
 		}
 		get expired() {
-			// has object left edge of screen?
-			return super.expired || (this.velocity[0] > 0 ? this.point[0] > w : this.point[0] < 0);
+			// has object left edge of screen in it's direction of travel
+			return super.expired || (this.velocity[0] > 0 ? this.point[0] > w : this.point[0]+this.bounds[0] < 0);
 		}
 		get payload() {
 			const x = this.point[0];
@@ -576,23 +576,23 @@ Each bullet you fire costs you one point
 	function setupLevelEnemies(state) {
 		const level = state.level;
 		const level_length = Math.floor((Math.random() * Math.max(level, 6) * 5) + (w * 2));
-		const num_heli = Math.floor(level * 1.5) + 2;
-		const num_jets = Math.floor(level * 1.2);
-		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/1.5, 6)));
+		const num_heli = Math.floor(level * 2) + 2;
+		const num_jets = Math.floor(level * 1);
+		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level, 5)));
 		function random_start_x() {
 			let x = Math.random() * level_length;
 			if (Math.random() >= 0.5) {x += w;}
 			else                      {x = x * -1;}
 			return Math.floor(x);
 		}
-		function random_velocity() {
-			return 1 - _random_spread(0.4);
+		function random_velocity(average=1, spread=0.4) {
+			return average - _random_spread(spread);
 		}
 		for (let i=0 ; i<num_heli ; i++) {
 			const x = random_start_x();
 			const v = random_velocity();
 			state.game_objects.push(
-				new Heli([x, 30+_random_spread(30)], [x>w?-v:v, 0], Math.floor(Math.random()*random_num_troops_max)+1 )
+				new Heli([x, 40+_random_spread(30)], [x>w?-v:v, 0], Math.floor(Math.random()*random_num_troops_max)+1 )
 			);
 		}
 		for (let i=0 ; i<num_jets ; i++) {
