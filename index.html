@@ -808,7 +808,6 @@ Each bullet you fire costs you one point
 		}
 
 		filterInPlace(state.game_objects, (o)=>o.expired);
-		state.frame++;
 
 		// Reset (after all particles have expired)
 		if (state.game_over && !hasGameObjectsOfType("Particle")) {
@@ -900,14 +899,17 @@ Each bullet you fire costs you one point
 		main();
 	}
 
+	const milliseconds_per_frame = 1000/60;
 	function main(time) {
-		if (c && state.running) {
+		if (state.running) {state.requestAnimationFrameId = requestAnimationFrame(main);}
+		if (!time) {state.epoch = undefined;}
+		if (!state.epoch && time) {state.epoch = time;}
+		const this_frame = Math.floor((time - state.epoch) / milliseconds_per_frame);
+		for (let f=0 ; f<this_frame-state.frame ; f++) {
 			incrementModel(state);
-			render(c, state);
 		}
-		if (state.running) {
-			state.requestAnimationFrameId = requestAnimationFrame(main);
-		}
+		state.frame = this_frame;
+		if (c) {render(c, state);}
 	}
 
 </script>
