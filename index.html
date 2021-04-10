@@ -177,6 +177,8 @@ Each bullet you fire costs you one point
 	document.addEventListener('keypress', (e)=>{
 		if (e.code == "Digit1") {state.players = 1; reset();}
 		if (e.code == "Digit2") {state.players = 2; reset();}
+		if (e.code == "Digit5") {state.options.shield[0] = !state.options.shield[0]; reset();}
+		if (e.code == "Digit6") {state.options.shield[1] = !state.options.shield[1]; reset();}
 	}, false);
 
 	// Running
@@ -225,13 +227,11 @@ Each bullet you fire costs you one point
 	function loadBase64Images(base64, sprite_location_data, sprite_output) {
 		const image = new Image();
 		image.onload = function() {
-			c.fillStyle = 'rgba(0,0,0,255)';  // TODO transparent??
-			c.fillRect(0, 0, w, h);
+			c.clearRect(0, 0, w, h);
 			c.drawImage(image, 0, 0);
 			for (let [name, location] of Object.entries(sprite_location_data)) {
 				sprite_output[name] = c.getImageData(...location);
 			}
-
 			flipX_sprites(sprite_output);
 			loadComplete();
 		};
@@ -422,10 +422,10 @@ Each bullet you fire costs you one point
 			this.score = 10;
 			if (Math.random()>0.5) {
 				const v = this.velocity[0];
-				//const r = Math.floor(_random_spread(50));
-				//const bx = 85;
-				const r = Math.floor(_random_spread(0));
-				const bx = 100;
+				const r = Math.floor(_random_spread(50));
+				const bx = 85;
+				//const r = Math.floor(_random_spread(0));
+				//const bx = 100;
 				this.payloads.push(new Bomb([(v>0?bx:w-bx)+r, this.point[1]+6], this.velocity));
 			}
 		}
@@ -519,24 +519,28 @@ Each bullet you fire costs you one point
 	}
 
 	class Gun extends AbstractGameObject {
-		constructor(point, color='cyan') {
+		constructor(point, shield=false, color='cyan') {
 			super(point, [0, 0]);
 			this.bounds = [32, 20];
 			this.length = 12;
 			this.gun_velocity = 3;
 			this.color = color;
+			this.shield = shield;
+			this.fire = 0;  // the frame firing started
 			this._angle = Math.PI;
 			const overshoot_angle = 0.0;
 			this.angle_min = Math.PI - (Math.PI/2) - overshoot_angle;
 			this.angle_max = Math.PI + (Math.PI/2) + overshoot_angle;
-			this.fire = 0;  // the frame firing started
 		}
 		get angle() {
 			return this._angle;
 		}
 		set angle(angle) {
-			this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);  // Disble shield
-			//this._angle = normaliseAngle(angle);
+			if (this.shield) {
+				this._angle = normaliseAngle(angle);
+			} else {
+				this._angle = Math.max(Math.min(angle, this.angle_max), this.angle_min);  // Limit to min/max angle
+			}
 		}
 		gun_tip_point(angle=0) {
 			return [
@@ -575,6 +579,7 @@ Each bullet you fire costs you one point
 			];
 		}
 		isInShield(point) {
+			if (!this.shield) {return;}
 			const dx = this.point[0] - point[0];
 			const dy = this.point[1] - point[1];
 			const h = Math.pow(dx,2) + Math.pow(dy,2);
@@ -610,8 +615,9 @@ Each bullet you fire costs you one point
 	function setupLevelEnemies(state) {
 		const level = state.level;
 		const level_length = Math.floor((Math.random() * Math.max(level, 6) * 5) + (w * 2));
-		const num_heli = Math.floor(level * 1) + 4;
-		const num_jets = Math.floor(level * 1);
+		let num_heli = Math.floor(level * (level%2));
+		if (num_heli) {num_heli+=1};
+		const num_jets = Math.floor(level * ((level+1)%2));
 		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/2, 5)));
 		function random_start_x() {
 			let x = Math.random() * level_length;
@@ -631,9 +637,9 @@ Each bullet you fire costs you one point
 		}
 		for (let i=0 ; i<num_jets ; i++) {
 			const x = random_start_x();
-			const v = random_velocity(1,0);
+			const v = random_velocity(1.2,0);
 			state.game_objects.push(
-				new Jet([x, 30+_random_spread(0)], [x>w?-v:v, 0])
+				new Jet([x, 30+_random_spread(30)], [x>w?-v:v, 0])
 			);
 		}
 
@@ -652,6 +658,9 @@ Each bullet you fire costs you one point
 		running: true,
 		store: loadLocalData(),
 		players: 1,
+		options: {
+			shield: [false, false],
+		},
 		input: {
 			keys: [
 				["Space", "ControlLeft", "ShiftLeft", "KeyZ", "KeyX"],
@@ -673,16 +682,20 @@ Each bullet you fire costs you one point
 		state.level = 0;
 		state.score = 0;
 		state.game_objects.length = 0;  // Clear all game_objects
-		state.frame = 0;
 
 		// Create Guns
 		const _w = Math.floor(w/2);
 		const _h = h-20-20 ;
 		if (state.players==1) {
-			state.guns = [new Gun([_w, _h])];
+			state.guns = [
+				new Gun([_w, _h], state.options.shield[0]),
+			];
 		}
 		if (state.players==2) {
-			state.guns = [new Gun([_w-12, _h]), new Gun([_w+12, _h])];
+			state.guns = [
+				new Gun([_w-12, _h], state.options.shield[0]), 
+				new Gun([_w+12, _h], state.options.shield[1]),
+			];
 		}
 		state.game_objects.push(...state.guns);
 	}
@@ -831,9 +844,7 @@ Each bullet you fire costs you one point
 	// Render ------------------------------------------------------------------
 
 	function render(c, state) {
-		c.fillStyle = 'black';
-		c.fillRect(0, 0, w, h);
-
+		c.clearRect(0, 0, w, h);
 		
 		function drawGun(gun) {
 			const [x, y, width] = [...gun.point, Math.floor(gun.bounds[0]/2)];
@@ -846,11 +857,13 @@ Each bullet you fire costs you one point
 			c.lineTo(...gun.gun_tip_point());
 			c.stroke();
 			// Shield (the when turret underneath)
-			c.fillStyle = 'magenta';
-			c.beginPath();
-			c.arc(...gun.point, width, ...gun.shieldAngles);
-			c.lineTo(...gun.point);
-			c.fill();
+			if (gun.shield) {
+				c.fillStyle = 'magenta';
+				c.beginPath();
+				c.arc(...gun.point, width, ...gun.shieldAngles);
+				c.lineTo(...gun.point);
+				c.fill();
+			}
 			// Gun Turret
 			c.beginPath();
 			c.strokeStyle = 'magenta';
@@ -896,7 +909,6 @@ Each bullet you fire costs you one point
 		c.fillText(`Hi-Score: ${state.store.hiscore}`, 240, h-6);
 	}
 
-
 	function loadComplete() {
 		main();
 	}
@@ -910,9 +922,10 @@ Each bullet you fire costs you one point
 		const frames_to_render = this_frame - state.frame;
 		for (let f=0 ; f<frames_to_render ; f++) {
 			incrementModel(state);
+			state.frame++;
 		}
+		state.frame = this_frame;  // Should not be needed? but belt and braces
 		if (c && frames_to_render) {render(c, state);}
-		state.frame = this_frame;
 	}
 
 </script>
