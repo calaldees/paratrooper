@@ -424,7 +424,7 @@ Each bullet you fire costs you one point
 			this.score = 10;
 			if (Math.random()>0.5) {
 				const v = this.velocity[0];
-				const r = Math.floor(_random_spread(50));
+				const r = Math.floor(_random_spread(25));
 				const bx = 85;
 				//const r = Math.floor(_random_spread(0));
 				//const bx = 100;
@@ -620,7 +620,7 @@ Each bullet you fire costs you one point
 		let num_heli = Math.floor(level * (level%2));
 		if (num_heli) {num_heli+=1};
 		const num_jets = Math.floor(level * ((level+1)%2));
-		const random_num_troops_max = Math.floor(Math.max(2,Math.min(level/2, 5)));
+		const random_num_troops_max = 3;
 		function random_start_x() {
 			let x = Math.random() * level_length;
 			if (Math.random() >= 0.5) {x += w;}
@@ -639,7 +639,7 @@ Each bullet you fire costs you one point
 		}
 		for (let i=0 ; i<num_jets ; i++) {
 			const x = random_start_x();
-			const v = random_velocity(1.2,0);
+			const v = random_velocity(1,0);
 			state.game_objects.push(
 				new Jet([x, 30+_random_spread(30)], [x>w?-v:v, 0])
 			);
