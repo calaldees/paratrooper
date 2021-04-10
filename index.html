@@ -663,6 +663,7 @@ Each bullet you fire costs you one point
 		options: {
 			shield: [false, false],
 			starting_level: 0,
+			level_complete_multiplier: 10,
 		},
 		input: {
 			keys: [
@@ -838,6 +839,7 @@ Each bullet you fire costs you one point
 		// End level
 		if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
 			state.level++;
+			state.score += state.level * state.options.level_complete_multiplier;
 			setupLevelEnemies(state);
 		}
 
