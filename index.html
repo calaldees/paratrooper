@@ -156,7 +156,7 @@ Each bullet you fire costs you one point
 		}
 		return -1;
 	}
-	function handel_keypress(event, active) {  // Apply keypress to correct player Gun object
+	function handel_keypress(event) {  // Apply keypress to correct player Gun object
 		let player_index = keycode_to_player_index(event.code);
 		if (event.type.indexOf('mouse')>=0) {player_index=0;}  // all mouse events are player 0 - for now
 		const g = state.guns[player_index];
@@ -164,8 +164,16 @@ Each bullet you fire costs you one point
 		if (event.type.indexOf('up')>=0) {g.fire=0;}
 		if (event.type.indexOf('down')>=0 && g.fire==0) {g.fire=state.frame;}
 	}
+	function handle_option_keypress(e) {
+		if (e.code == "Digit1") {state.players = 1; reset();}
+		if (e.code == "Digit2") {state.players = 2; reset();}
+		if (e.code == "Digit5") {state.options.shield[0] = !state.options.shield[0]; reset();}
+		if (e.code == "Digit6") {state.options.shield[1] = !state.options.shield[1]; reset();}
+		if (e.code == "ArrowUp") {state.options.starting_level+=1; reset();}
+		if (e.code == "ArrowDown") {state.options.starting_level+=-1; reset();}
+	}
 	document.addEventListener('mouseup', handel_keypress, false);
-	document.addEventListener('keyup', handel_keypress, false);
+	document.addEventListener('keyup', (e)=>{handel_keypress(e); handle_option_keypress(e)}, false);
 	document.addEventListener('mousedown', handel_keypress, false);
 	document.addEventListener('keydown', handel_keypress, false);
 	document.addEventListener("pointermove", (e) => {
@@ -173,12 +181,6 @@ Each bullet you fire costs you one point
 		if (state.guns[1]) {
 			state.guns[1].angle -= e.movementY/180;
 		}
-	}, false);
-	document.addEventListener('keypress', (e)=>{
-		if (e.code == "Digit1") {state.players = 1; reset();}
-		if (e.code == "Digit2") {state.players = 2; reset();}
-		if (e.code == "Digit5") {state.options.shield[0] = !state.options.shield[0]; reset();}
-		if (e.code == "Digit6") {state.options.shield[1] = !state.options.shield[1]; reset();}
 	}, false);
 
 	// Running
@@ -660,6 +662,7 @@ Each bullet you fire costs you one point
 		players: 1,
 		options: {
 			shield: [false, false],
+			starting_level: 0,
 		},
 		input: {
 			keys: [
@@ -679,7 +682,7 @@ Each bullet you fire costs you one point
 
 	function reset() {
 		state.game_over = false;
-		state.level = 0;
+		state.level = Math.max(0, state.options.starting_level);
 		state.score = 0;
 		state.game_objects.length = 0;  // Clear all game_objects
 
