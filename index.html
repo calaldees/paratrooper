@@ -659,10 +659,11 @@ Each bullet you fire costs you one point
 	const state = {
 		running: true,
 		store: loadLocalData(),
+		loaded_assets: false,
 		players: 1,
 		options: {
 			shield: [false, false],
-			starting_level: 0,
+			starting_level: 1,
 			level_complete_multiplier: 10,
 		},
 		input: {
@@ -679,14 +680,13 @@ Each bullet you fire costs you one point
 		//score: 0,
 		//game_over: false,
 	};
-	reset();
 
 	function reset() {
-		state.game_over = false;
-		state.level = Math.max(0, state.options.starting_level);
-		state.score = 0;
 		state.game_objects.length = 0;  // Clear all game_objects
-
+		state.game_over = false;
+		state.level = Math.max(1, state.options.starting_level);
+		state.score = 0;
+		
 		// Create Guns
 		const _w = Math.floor(w/2);
 		const _h = h-20-20 ;
@@ -702,6 +702,8 @@ Each bullet you fire costs you one point
 			];
 		}
 		state.game_objects.push(...state.guns);
+
+		setupLevelEnemies(state);
 	}
 
 
@@ -838,8 +840,8 @@ Each bullet you fire costs you one point
 		}
 		// End level
 		if (game_object_count["Jet"] + game_object_count["Heli"] <= 0) {
-			state.level++;
 			state.score += state.level * state.options.level_complete_multiplier;
+			state.level++;
 			setupLevelEnemies(state);
 		}
 
@@ -915,11 +917,14 @@ Each bullet you fire costs you one point
 	}
 
 	function loadComplete() {
+		state.loaded_assets = true;
+		reset();
 		main();
 	}
 
 	const milliseconds_per_frame = 1000/60;
 	function main(time) {
+		if (!state.loaded_assets) {return;}
 		if (state.running) {state.requestAnimationFrameId = requestAnimationFrame(main);}
 		if (!time) {state.epoch = undefined;}
 		if (!state.epoch && time) {state.epoch = time;}
