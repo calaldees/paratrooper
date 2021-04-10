@@ -23,12 +23,18 @@
 			right: 0;
 			user-select: none;
 		}
+		#sound_toggle {
+			position: absolute;
+			bottom: 0;
+			right: 0;
+		}
 	</style>
 </head>
 <body>
 	<!-- Chrome Canvas Fullscreen - F11 to toggle fullscreen -->
 	<canvas id="canvas" width="480" height="270"></canvas>
 	<a id="github_fork" href="https://github.com/calaldees/paratrooper"><img loading="lazy" width="149" height="149" src="https://github.blog/wp-content/uploads/2008/12/forkme_right_white_ffffff.png?resize=149%2C149" class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1"></a>
+	<div id="sound_toggle">🔇🔈🔊</div>
 </body>
 <script type="module">
 
@@ -147,6 +153,8 @@ Each bullet you fire costs you one point
 	const w_crop_for_4_by_3 = 60;  // pixels to not use on left/right
 
 	// Events ------------------------------------------------------------------
+
+	document.getElementById("sound_toggle").addEventListener("click", toggleAudio);
 
 	canvas.addEventListener('click', (e) => {canvas.requestPointerLock();}, false);
 	function keycode_to_player_index(code) {
@@ -939,15 +947,26 @@ Each bullet you fire costs you one point
 	const audioSamples = {
 		// TODO: AudioBuffer from base64? https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/atob
 	}
-	function initAudio() {
-		audioContext = window.AudioContext();
-		const audioNoise = createBuffer(1, 22050, 22050);
+	function toggleAudio() {
+		if (!audioContext) {
+			console.log("initAudio");
+			audioContext = new window.AudioContext();
+			audioSamples['bullet'] = audioContext.createBuffer(1, 1000, 22050);
+			// Generate random noise
+			const d = audioSamples['bullet'].getChannelData(0);
+			for (let i=0 ; i<d.length ; i++) {d[i] = (Math.random()-.5)*Math.pow(1-(i/d.length),8);}
+		} else {
+			// TODO: disable audio
+		}
 	}
 	function playSample(sample_name) {
 		if (!audioContext) {return;}
 		const s = audioSamples[sample_name];
 		if (!s) {return;}
-		// play buffer?
+		const bufferSource = audioContext.createBufferSource();
+		bufferSource.buffer = s;
+		bufferSource.connect(audioContext.destination);
+		bufferSource.start();
 	}
 	function playNote(note, duration) {
 		if (!audioContext) {return;}
